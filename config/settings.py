@@ -47,9 +47,6 @@ class Settings:
     CHAOS_MIN_INTERVAL_S: int = int(os.getenv("CHAOS_MIN_INTERVAL_S", "5"))
     CHAOS_MAX_INTERVAL_S: int = int(os.getenv("CHAOS_MAX_INTERVAL_S", "15"))
 
-    # SQLite
-    SQLITE_DB_PATH: str = os.getenv("SQLITE_DB_PATH", "flowstorm.db")
-
     # WebSocket
     WS_METRICS_PUSH_INTERVAL_MS: int = int(os.getenv("WS_METRICS_PUSH_INTERVAL_MS", "500"))
 

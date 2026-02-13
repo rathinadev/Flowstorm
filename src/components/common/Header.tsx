@@ -1,18 +1,33 @@
+import { useState } from "react";
 import { useMetricsStore } from "../../store/metricsStore";
 import { useChaosStore } from "../../store/chaosStore";
+
+const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
+  draft: { bg: "bg-gray-500/10", text: "text-gray-400", label: "DRAFT" },
+  deploying: { bg: "bg-yellow-500/10", text: "text-yellow-400", label: "DEPLOYING" },
+  running: { bg: "bg-green-500/10", text: "text-green-400", label: "RUNNING" },
+  paused: { bg: "bg-blue-500/10", text: "text-blue-400", label: "PAUSED" },
+  failed: { bg: "bg-red-500/10", text: "text-red-400", label: "FAILED" },
+  stopped: { bg: "bg-gray-500/10", text: "text-gray-400", label: "STOPPED" },
+};
 
 interface HeaderProps {
   pipelineId: string | null;
   pipelineName: string;
+  pipelineStatus: string;
+  onNameChange: (name: string) => void;
 }
 
-export function Header({ pipelineId, pipelineName }: HeaderProps) {
+export function Header({ pipelineId, pipelineName, pipelineStatus, onNameChange }: HeaderProps) {
   const metrics = useMetricsStore((s) => s.metrics);
   const chaosActive = useChaosStore((s) => s.active);
+  const [editing, setEditing] = useState(false);
+
+  const statusStyle = STATUS_STYLES[pipelineStatus] || STATUS_STYLES.draft;
 
   return (
     <header className="h-12 bg-flowstorm-surface border-b border-flowstorm-border flex items-center justify-between px-4">
-      {/* Left: Logo */}
+      {/* Left: Logo + Pipeline name */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-md bg-gradient-to-br from-flowstorm-primary to-flowstorm-secondary flex items-center justify-center">
@@ -23,14 +38,38 @@ export function Header({ pipelineId, pipelineName }: HeaderProps) {
           </span>
         </div>
 
-        {pipelineId && (
-          <>
-            <div className="w-px h-5 bg-flowstorm-border" />
-            <span className="text-xs text-flowstorm-muted">
-              {pipelineName || "Untitled Pipeline"}
-            </span>
-          </>
+        <div className="w-px h-5 bg-flowstorm-border" />
+
+        {/* Editable pipeline name */}
+        {editing ? (
+          <input
+            className="text-xs bg-flowstorm-bg border border-flowstorm-border rounded px-2 py-1 text-flowstorm-text outline-none focus:border-flowstorm-primary"
+            value={pipelineName}
+            onChange={(e) => onNameChange(e.target.value)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => e.key === "Enter" && setEditing(false)}
+            autoFocus
+          />
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs text-flowstorm-muted hover:text-flowstorm-text transition-colors"
+            title="Click to rename"
+          >
+            {pipelineName || "Untitled Pipeline"}
+          </button>
         )}
+
+        {/* Pipeline status badge */}
+        <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${statusStyle.bg} ${statusStyle.text}`}>
+          {pipelineStatus === "deploying" && (
+            <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
+          )}
+          {pipelineStatus === "running" && (
+            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+          )}
+          {statusStyle.label}
+        </div>
       </div>
 
       {/* Right: Status indicators */}

@@ -169,6 +169,15 @@ async def delete_pipeline(pipeline_id: str):
 @router.post("/pipelines/{pipeline_id}/chaos", response_model=ChaosResponse)
 async def start_chaos(pipeline_id: str, request: ChaosRequest):
     """Start chaos mode on a pipeline."""
+    # Demo mode: route chaos through the simulator
+    if _demo_simulator and _demo_simulator.is_running:
+        _demo_simulator.set_chaos_active(True)
+        return ChaosResponse(
+            started=True,
+            intensity=request.intensity,
+            duration_seconds=request.duration_seconds,
+        )
+
     manager = _get_manager()
     runtime = manager.get_runtime(pipeline_id)
     if not runtime:
@@ -195,6 +204,10 @@ async def start_chaos(pipeline_id: str, request: ChaosRequest):
 @router.delete("/pipelines/{pipeline_id}/chaos")
 async def stop_chaos(pipeline_id: str):
     """Stop chaos mode."""
+    if _demo_simulator and _demo_simulator.is_running:
+        _demo_simulator.set_chaos_active(False)
+        return {"status": "stopped", "pipeline_id": pipeline_id}
+
     chaos = _chaos_engines.pop(pipeline_id, None)
     if chaos:
         await chaos.stop()
@@ -331,6 +344,10 @@ async def get_lineage(pipeline_id: str, event_id: str):
 @router.get("/pipelines/{pipeline_id}/health")
 async def get_health(pipeline_id: str):
     """Get health status of all workers in a pipeline."""
+    # Demo mode: health data comes through WebSocket, return summary here
+    if _demo_simulator and _demo_simulator.is_running:
+        return {"pipeline_id": pipeline_id, "workers": {}}
+
     manager = _get_manager()
     runtime = manager.get_runtime(pipeline_id)
     if not runtime:

@@ -11,6 +11,19 @@ services:
     networks:
       - flowstorm-net
 
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: flowstorm
+      POSTGRES_PASSWORD: flowstorm
+      POSTGRES_DB: flowstorm
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - flowstorm-net
+
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
@@ -25,6 +38,7 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
   mosquitto_data:
   mosquitto_log:
 

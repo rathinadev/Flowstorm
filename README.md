@@ -36,6 +36,7 @@ graph TD
     Engine --> Support
     Intelligence -->|Docker SDK| Workers[Docker Workers]
     Workers <-->|Redis Streams| Transport[(Redis)]
+    Support -->|asyncpg| PG_DB[(PostgreSQL)]
 ```
 
 ## Directory Structure
@@ -71,10 +72,10 @@ src/
 ├── pipeline_git/        # Version control
 │   ├── versioner.py     # Version management
 │   ├── differ.py        # Diff generation
-│   └── store.py         # Redis version storage
+│   └── store.py         # PostgreSQL version storage (asyncpg)
 ├── checkpoint/          # State management
 │   ├── manager.py       # Checkpoint coordination
-│   └── store.py         # Redis checkpoint store
+│   └── store.py         # PostgreSQL checkpoint store (asyncpg)
 ├── chaos/               # Chaos engineering
 │   ├── engine.py        # Chaos orchestrator
 │   └── scenarios.py     # Chaos scenarios
@@ -102,7 +103,7 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 
 # Start infrastructure
-docker-compose up -d redis mosquitto
+docker-compose up -d redis postgres mosquitto
 
 # Run the server
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
@@ -126,7 +127,8 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 - **fastapi** + **uvicorn**: Web framework and ASGI server
 - **websockets**: Real-time communication
-- **redis**: Message transport + state store
+- **redis**: Message transport + ephemeral state
+- **asyncpg**: PostgreSQL driver for persistent storage
 - **docker**: Worker container orchestration
 - **paho-mqtt**: MQTT client for IoT sources
 - **httpx**: Async HTTP client (webhook sinks)

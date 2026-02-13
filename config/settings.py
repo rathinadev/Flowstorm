@@ -17,6 +17,20 @@ class Settings:
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
 
+    # PostgreSQL
+    POSTGRES_HOST: str = os.getenv("POSTGRES_HOST", "localhost")
+    POSTGRES_PORT: int = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_USER: str = os.getenv("POSTGRES_USER", "flowstorm")
+    POSTGRES_PASSWORD: str = os.getenv("POSTGRES_PASSWORD", "flowstorm")
+    POSTGRES_DB: str = os.getenv("POSTGRES_DB", "flowstorm")
+
+    @property
+    def POSTGRES_DSN(self) -> str:
+        return (
+            f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
     # MQTT
     MQTT_BROKER_HOST: str = os.getenv("MQTT_BROKER_HOST", "localhost")
     MQTT_BROKER_PORT: int = int(os.getenv("MQTT_BROKER_PORT", "1883"))

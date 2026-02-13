@@ -64,6 +64,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("FlowStorm engine shutting down...")
+    if versioner:
+        await versioner.store.close()
     if health_monitor:
         await health_monitor.stop()
     if runtime_manager:

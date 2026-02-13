@@ -1,7 +1,8 @@
 """FlowStorm - Self-Healing Stream Processing Engine.
 
 Main FastAPI application entry point.
-Wires together the runtime manager, API routes, health monitor, and WebSocket.
+Wires together all subsystems: runtime, health monitor, optimizer,
+chaos engine, pipeline git, NLP parser.
 """
 
 import logging
@@ -11,9 +12,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
-from src.api.routes import router, set_runtime_manager
+from src.api.routes import router, set_runtime_manager, set_versioner, set_nlp
 from src.engine.runtime import RuntimeManager
 from src.health.monitor import HealthMonitor
+from src.nlp.mapper import NLPMapper
+from src.nlp.parser import NLPParser
+from src.pipeline_git.versioner import PipelineVersioner
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,12 +28,13 @@ logger = logging.getLogger("flowstorm")
 # Global instances
 runtime_manager: RuntimeManager | None = None
 health_monitor: HealthMonitor | None = None
+versioner: PipelineVersioner | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle management."""
-    global runtime_manager, health_monitor
+    global runtime_manager, health_monitor, versioner
 
     logger.info("FlowStorm engine starting up...")
 
@@ -49,6 +54,16 @@ async def lifespan(app: FastAPI):
         runtime_manager=runtime_manager,
     )
     await health_monitor.start()
+
+    # Initialize pipeline versioner
+    versioner = PipelineVersioner()
+    await versioner.initialize()
+    set_versioner(versioner)
+
+    # Initialize NLP parser and mapper
+    nlp_parser = NLPParser()
+    nlp_mapper = NLPMapper()
+    set_nlp(nlp_parser, nlp_mapper)
 
     logger.info("FlowStorm engine ready.")
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -24,6 +25,7 @@ from src.api.websocket import (
     PipelineEventForwarder,
     ws_manager,
 )
+from src.chaos.engine import ChaosEngine
 from src.engine.runtime import RuntimeManager
 from src.models.pipeline import (
     OperatorConfig,
@@ -32,13 +34,20 @@ from src.models.pipeline import (
     PipelineNode,
     OperatorType,
 )
+from src.nlp.mapper import NLPMapper
+from src.nlp.parser import NLPParser
+from src.pipeline_git.versioner import PipelineVersioner, VersionTrigger
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-# These will be injected via app state in main.py
+# Injected via set_* functions from main.py
 _runtime_manager: RuntimeManager | None = None
+_versioner: PipelineVersioner | None = None
+_nlp_parser: NLPParser | None = None
+_nlp_mapper: NLPMapper | None = None
+_chaos_engines: dict[str, ChaosEngine] = {}
 _event_forwarders: dict[str, PipelineEventForwarder] = {}
 _metrics_pushers: dict[str, MetricsPusher] = {}
 
@@ -46,6 +55,17 @@ _metrics_pushers: dict[str, MetricsPusher] = {}
 def set_runtime_manager(manager: RuntimeManager) -> None:
     global _runtime_manager
     _runtime_manager = manager
+
+
+def set_versioner(versioner: PipelineVersioner) -> None:
+    global _versioner
+    _versioner = versioner
+
+
+def set_nlp(parser: NLPParser, mapper: NLPMapper) -> None:
+    global _nlp_parser, _nlp_mapper
+    _nlp_parser = parser
+    _nlp_mapper = mapper
 
 
 def _get_manager() -> RuntimeManager:
@@ -93,6 +113,10 @@ async def create_pipeline(request: CreatePipelineRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Save initial version
+    if _versioner:
+        await _versioner.create_initial_version(runtime.dag)
+
     # Start event forwarding and metrics pushing
     if manager.redis:
         forwarder = PipelineEventForwarder(pipeline.id, manager.redis, ws_manager)
@@ -129,6 +153,11 @@ async def delete_pipeline(pipeline_id: str):
     """Stop and remove a pipeline."""
     manager = _get_manager()
 
+    # Stop chaos if running
+    chaos = _chaos_engines.pop(pipeline_id, None)
+    if chaos:
+        await chaos.stop()
+
     # Stop event forwarding
     forwarder = _event_forwarders.pop(pipeline_id, None)
     if forwarder:
@@ -151,8 +180,17 @@ async def start_chaos(pipeline_id: str, request: ChaosRequest):
     if not runtime:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
-    # Chaos engine will be implemented in src/chaos/
-    # For now, return acknowledgment
+    # Stop existing chaos if running
+    if pipeline_id in _chaos_engines:
+        await _chaos_engines[pipeline_id].stop()
+
+    chaos = ChaosEngine(runtime, manager.redis)
+    await chaos.start(
+        intensity=request.intensity,
+        duration_seconds=request.duration_seconds,
+    )
+    _chaos_engines[pipeline_id] = chaos
+
     return ChaosResponse(
         started=True,
         intensity=request.intensity,
@@ -163,7 +201,19 @@ async def start_chaos(pipeline_id: str, request: ChaosRequest):
 @router.delete("/pipelines/{pipeline_id}/chaos")
 async def stop_chaos(pipeline_id: str):
     """Stop chaos mode."""
+    chaos = _chaos_engines.pop(pipeline_id, None)
+    if chaos:
+        await chaos.stop()
     return {"status": "stopped", "pipeline_id": pipeline_id}
+
+
+@router.get("/pipelines/{pipeline_id}/chaos/history")
+async def get_chaos_history(pipeline_id: str):
+    """Get chaos event history."""
+    chaos = _chaos_engines.get(pipeline_id)
+    if chaos:
+        return {"events": chaos.get_history()}
+    return {"events": []}
 
 
 # ---- NLP ----
@@ -176,27 +226,99 @@ async def nlp_command(pipeline_id: str, request: NLPCommandRequest):
     if not runtime:
         raise HTTPException(status_code=404, detail="Pipeline not found")
 
-    # NLP parser will be implemented in src/nlp/
+    if not _nlp_parser or not _nlp_mapper:
+        raise HTTPException(status_code=503, detail="NLP not initialized")
+
+    # Get current pipeline state
+    current_state = runtime.dag.snapshot()
+
+    # Parse the command
+    parsed = await _nlp_parser.parse(request.text, current_state)
+
+    if not parsed.get("actions"):
+        return NLPCommandResponse(
+            success=False,
+            interpretation=parsed.get("interpretation", "Could not understand"),
+            changes=[],
+        )
+
+    # Apply the actions to the DAG
+    changes = _nlp_mapper.apply_actions(runtime.dag, parsed)
+
+    # Save version
+    if _versioner:
+        await _versioner.save_nlp_version(
+            runtime.dag,
+            user_command=request.text,
+            changes_description=parsed.get("interpretation", ""),
+        )
+
     return NLPCommandResponse(
         success=True,
-        interpretation=f"Understood: {request.text}",
-        changes=[],
+        interpretation=parsed.get("interpretation", ""),
+        changes=[changes],
     )
 
 
 # ---- Pipeline Git ----
 
-@router.get("/pipelines/{pipeline_id}/versions", response_model=list[PipelineVersionResponse])
+@router.get("/pipelines/{pipeline_id}/versions")
 async def get_versions(pipeline_id: str):
     """Get pipeline version history."""
-    # Pipeline Git will be implemented in src/pipeline_git/
-    return []
+    if not _versioner:
+        return []
+
+    history = await _versioner.get_history(pipeline_id)
+    return [
+        {
+            "version_id": v["version_number"],
+            "trigger": v["trigger"],
+            "description": v["description"],
+            "timestamp": v["created_at"],
+            "node_count": v["node_count"],
+            "edge_count": v["edge_count"],
+        }
+        for v in history
+    ]
+
+
+@router.get("/pipelines/{pipeline_id}/versions/{from_v}/diff/{to_v}")
+async def diff_versions(pipeline_id: str, from_v: int, to_v: int):
+    """Get visual diff between two pipeline versions."""
+    if not _versioner:
+        raise HTTPException(status_code=503, detail="Versioner not initialized")
+
+    diff = await _versioner.diff_versions(pipeline_id, from_v, to_v)
+    if not diff:
+        raise HTTPException(status_code=404, detail="Versions not found")
+
+    return diff.to_dict()
 
 
 @router.post("/pipelines/{pipeline_id}/rollback")
 async def rollback_pipeline(pipeline_id: str, request: RollbackRequest):
     """Rollback pipeline to a previous version."""
-    return {"status": "rolled_back", "version_id": request.version_id}
+    manager = _get_manager()
+    runtime = manager.get_runtime(pipeline_id)
+    if not runtime:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    if not _versioner:
+        raise HTTPException(status_code=503, detail="Versioner not initialized")
+
+    # Get the target version's DAG snapshot
+    snapshot = await _versioner.get_snapshot(pipeline_id, request.version_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail=f"Version {request.version_id} not found")
+
+    # Save rollback version
+    await _versioner.save_rollback_version(runtime.dag, request.version_id)
+
+    return {
+        "status": "rolled_back",
+        "version_id": request.version_id,
+        "snapshot": snapshot,
+    }
 
 
 # ---- Lineage ----
@@ -204,7 +326,46 @@ async def rollback_pipeline(pipeline_id: str, request: RollbackRequest):
 @router.get("/pipelines/{pipeline_id}/lineage/{event_id}")
 async def get_lineage(pipeline_id: str, event_id: str):
     """Trace an event's lineage through the pipeline."""
-    return {"event_id": event_id, "path": [], "message": "Lineage tracing coming soon"}
+    manager = _get_manager()
+    runtime = manager.get_runtime(pipeline_id)
+    if not runtime:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    # Read the event from the output stream
+    output_key = f"flowstorm:output:{pipeline_id}"
+    try:
+        messages = await manager.redis.xrange(output_key, min=event_id, max=event_id)
+        if messages:
+            msg_id, fields = messages[0]
+            lineage_raw = fields.get("lineage", "[]")
+            lineage = json.loads(lineage_raw)
+            data = json.loads(fields.get("data", "{}"))
+            return {
+                "event_id": msg_id,
+                "data": data,
+                "lineage": lineage,
+                "node_id": fields.get("node_id", ""),
+            }
+    except Exception as e:
+        logger.error(f"Lineage lookup error: {e}")
+
+    # Fallback: search recent events
+    try:
+        messages = await manager.redis.xrevrange(output_key, count=100)
+        for msg_id, fields in messages:
+            if event_id in msg_id:
+                lineage_raw = fields.get("lineage", "[]")
+                lineage = json.loads(lineage_raw)
+                data = json.loads(fields.get("data", "{}"))
+                return {
+                    "event_id": msg_id,
+                    "data": data,
+                    "lineage": lineage,
+                }
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail="Event not found")
 
 
 # ---- Health ----
@@ -223,10 +384,38 @@ async def get_health(pipeline_id: str):
             wid: {
                 "status": w.status.value,
                 "health_score": w.health.score,
+                "node_id": w.node_id,
+                "operator_type": w.operator_type,
                 "metrics": w.metrics.model_dump(),
+                "issues": w.health.issues,
             }
             for wid, w in runtime.workers.items()
         },
+    }
+
+
+@router.get("/pipelines/{pipeline_id}/healing-log")
+async def get_healing_log(pipeline_id: str):
+    """Get self-healing action history."""
+    from src.main import health_monitor
+    if not health_monitor:
+        return {"events": []}
+
+    events = health_monitor.get_healing_log(pipeline_id)
+    return {
+        "events": [
+            {
+                "action": e.action.value,
+                "trigger": e.trigger,
+                "target_node_id": e.target_node_id,
+                "details": e.details,
+                "events_replayed": e.events_replayed,
+                "duration_ms": e.duration_ms,
+                "success": e.success,
+                "timestamp": e.timestamp.isoformat(),
+            }
+            for e in events
+        ]
     }
 
 
@@ -239,7 +428,6 @@ async def websocket_endpoint(websocket: WebSocket, pipeline_id: str):
 
     try:
         while True:
-            # Listen for commands from the frontend
             data = await websocket.receive_json()
             command = data.get("type", "")
 

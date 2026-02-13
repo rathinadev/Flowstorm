@@ -12,6 +12,7 @@ from src.optimizer.rules import (
     OperatorFusionRule,
     AutoParallelRule,
     BufferInsertionRule,
+    WindowOptimizationRule,
     evaluate_all_rules,
     OptimizationType,
 )
@@ -193,6 +194,73 @@ class TestBufferInsertion:
             },
         )
         rule = BufferInsertionRule()
+        actions = rule.evaluate(analysis)
+        assert len(actions) == 0
+
+
+# ---- Combined Rule Evaluation ----
+
+
+# ---- Window Optimization ----
+
+
+class TestWindowOptimization:
+    def test_high_memory_and_latency_triggers(self):
+        analysis = AnalysisResult(
+            pipeline_id="test",
+            operator_stats={
+                "w1": OperatorStats(
+                    node_id="w1", operator_type="window",
+                    avg_memory_percent=80, avg_latency_ms=250,
+                ),
+            },
+        )
+        rule = WindowOptimizationRule()
+        actions = rule.evaluate(analysis)
+        assert len(actions) == 1
+        assert actions[0].optimization_type == OptimizationType.WINDOW_OPTIMIZATION
+        assert actions[0].params["suggested_window_type"] == "tumbling"
+
+    def test_high_latency_only_suggests_session(self):
+        analysis = AnalysisResult(
+            pipeline_id="test",
+            operator_stats={
+                "w1": OperatorStats(
+                    node_id="w1", operator_type="window",
+                    avg_memory_percent=40, avg_latency_ms=400,
+                ),
+            },
+        )
+        rule = WindowOptimizationRule()
+        actions = rule.evaluate(analysis)
+        assert len(actions) == 1
+        assert actions[0].params["suggested_window_type"] == "session"
+
+    def test_healthy_window_no_action(self):
+        analysis = AnalysisResult(
+            pipeline_id="test",
+            operator_stats={
+                "w1": OperatorStats(
+                    node_id="w1", operator_type="window",
+                    avg_memory_percent=40, avg_latency_ms=50,
+                ),
+            },
+        )
+        rule = WindowOptimizationRule()
+        actions = rule.evaluate(analysis)
+        assert len(actions) == 0
+
+    def test_non_window_operator_ignored(self):
+        analysis = AnalysisResult(
+            pipeline_id="test",
+            operator_stats={
+                "f1": OperatorStats(
+                    node_id="f1", operator_type="filter",
+                    avg_memory_percent=90, avg_latency_ms=500,
+                ),
+            },
+        )
+        rule = WindowOptimizationRule()
         actions = rule.evaluate(analysis)
         assert len(actions) == 0
 

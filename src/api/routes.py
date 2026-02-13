@@ -23,7 +23,9 @@ from src.api.websocket import (
     PipelineEventForwarder,
     ws_manager,
 )
+from src.ab_testing.manager import ABTestManager
 from src.chaos.engine import ChaosEngine
+from src.dlq.diagnostics import DLQDiagnostics
 from src.engine.runtime import RuntimeManager
 from src.models.pipeline import (
     OperatorConfig,
@@ -44,6 +46,8 @@ _versioner: PipelineVersioner | None = None
 _chaos_engines: dict[str, ChaosEngine] = {}
 _event_forwarders: dict[str, PipelineEventForwarder] = {}
 _metrics_pushers: dict[str, MetricsPusher] = {}
+_ab_manager = ABTestManager()
+_dlq_diagnostics: DLQDiagnostics | None = None
 
 
 def set_runtime_manager(manager: RuntimeManager) -> None:
@@ -389,3 +393,88 @@ async def websocket_endpoint(websocket: WebSocket, pipeline_id: str):
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         ws_manager.disconnect(websocket, pipeline_id)
+
+
+# ---- Dead Letter Queue ----
+
+@router.get("/pipelines/{pipeline_id}/dlq")
+async def get_dlq(pipeline_id: str, count: int = 100):
+    """Get dead letter queue entries with diagnostics."""
+    manager = _get_manager()
+    if not manager.redis:
+        return {"entries": [], "total": 0}
+
+    global _dlq_diagnostics
+    if not _dlq_diagnostics:
+        _dlq_diagnostics = DLQDiagnostics(manager.redis)
+
+    entries = await _dlq_diagnostics.get_entries(pipeline_id, count)
+    return {
+        "entries": [e.to_dict() for e in entries],
+        "total": len(entries),
+    }
+
+
+@router.get("/pipelines/{pipeline_id}/dlq/stats")
+async def get_dlq_stats(pipeline_id: str):
+    """Get aggregated DLQ statistics grouped by failure type."""
+    manager = _get_manager()
+    if not manager.redis:
+        return {"total_failed": 0, "groups": [], "by_node": {}}
+
+    global _dlq_diagnostics
+    if not _dlq_diagnostics:
+        _dlq_diagnostics = DLQDiagnostics(manager.redis)
+
+    return await _dlq_diagnostics.get_stats(pipeline_id)
+
+
+# ---- A/B Testing ----
+
+@router.post("/ab-tests")
+async def create_ab_test(
+    pipeline_id_a: str,
+    pipeline_id_b: str,
+    split_percent: int = 50,
+    name: str = "",
+):
+    """Create a new A/B test between two pipeline versions."""
+    test_id = _ab_manager.create_test(
+        pipeline_id_a, pipeline_id_b, split_percent, name
+    )
+    return {"test_id": test_id, "status": "running"}
+
+
+@router.get("/ab-tests")
+async def list_ab_tests():
+    """List all A/B tests."""
+    return {"tests": _ab_manager.list_tests()}
+
+
+@router.get("/ab-tests/{test_id}")
+async def get_ab_test(test_id: str):
+    """Get A/B test results."""
+    result = _ab_manager.get_result(test_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="A/B test not found")
+    return result.model_dump()
+
+
+@router.delete("/ab-tests/{test_id}")
+async def stop_ab_test(test_id: str):
+    """Stop an A/B test and return final results."""
+    result = _ab_manager.stop_test(test_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="A/B test not found")
+    return result.model_dump()
+
+
+# ---- Predictive Scaling ----
+
+@router.get("/pipelines/{pipeline_id}/prediction")
+async def get_prediction(pipeline_id: str):
+    """Get predictive scaling recommendation."""
+    from src.main import health_monitor
+    if not health_monitor:
+        return {"recommendation": {"action": "none", "reason": "Monitor not running"}}
+    return health_monitor.get_prediction(pipeline_id)

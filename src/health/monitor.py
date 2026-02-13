@@ -18,6 +18,7 @@ import redis.asyncio as aioredis
 
 from src.models.events import Heartbeat, HealingAction, HealingEvent
 from src.models.worker import WorkerHealth, WorkerMetrics, WorkerStatus
+from src.health.predictor import PredictiveScaler
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,9 @@ class HealthMonitor:
 
         # Healing events log
         self.healing_log: list[HealingEvent] = []
+
+        # Predictive scaler
+        self.scaler = PredictiveScaler()
 
         self._running = False
         self._tasks: list[asyncio.Task] = []
@@ -137,6 +141,13 @@ class HealthMonitor:
             (ts, eps) for ts, eps in self._throughput_history[worker_id]
             if ts >= cutoff
         ]
+
+        # Feed throughput data to predictive scaler
+        self.scaler.record_throughput(
+            pipeline_id=heartbeat.pipeline_id,
+            timestamp=now,
+            eps=heartbeat.events_per_second,
+        )
 
         # Store latest metrics in Redis for dashboard consumption
         metrics_key = f"flowstorm:metrics:{heartbeat.pipeline_id}"
@@ -325,3 +336,7 @@ class HealthMonitor:
         if pipeline_id:
             return [e for e in self.healing_log if e.pipeline_id == pipeline_id]
         return self.healing_log
+
+    def get_prediction(self, pipeline_id: str) -> dict:
+        """Get predictive scaling recommendation for a pipeline."""
+        return self.scaler.predict_next_interval(pipeline_id)

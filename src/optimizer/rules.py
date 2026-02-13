@@ -192,12 +192,74 @@ class BufferInsertionRule(OptimizationRule):
         return actions
 
 
+class WindowOptimizationRule(OptimizationRule):
+    """
+    Switch windowing strategy based on data arrival patterns.
+
+    Trigger: Window operator with high latency or excessive memory,
+             suggesting the current strategy is a poor fit.
+
+    Action: Recommend switching window type (e.g. sliding -> tumbling
+            when slide_interval equals window_size, or session windows
+            when data is bursty with long idle gaps).
+    """
+
+    def evaluate(self, analysis: AnalysisResult) -> list[OptimizationAction]:
+        actions = []
+
+        for node_id, stats in analysis.operator_stats.items():
+            if stats.operator_type != "window":
+                continue
+
+            # High memory + high latency on a window operator -> wrong strategy
+            if stats.avg_memory_percent > 70 and stats.avg_latency_ms > 200:
+                actions.append(OptimizationAction(
+                    optimization_type=OptimizationType.WINDOW_OPTIMIZATION,
+                    description=(
+                        f"Window operator '{node_id}' has high memory "
+                        f"({stats.avg_memory_percent:.0f}%) and latency "
+                        f"({stats.avg_latency_ms:.0f}ms). Consider switching "
+                        f"to a tumbling window to reduce state size."
+                    ),
+                    target_nodes=[node_id],
+                    params={
+                        "node_id": node_id,
+                        "suggested_window_type": "tumbling",
+                        "current_memory_pct": stats.avg_memory_percent,
+                        "current_latency_ms": stats.avg_latency_ms,
+                    },
+                    estimated_gain="~50% memory reduction",
+                    priority=60,
+                ))
+            elif stats.avg_latency_ms > 300:
+                # High latency alone -> suggest smaller window
+                actions.append(OptimizationAction(
+                    optimization_type=OptimizationType.WINDOW_OPTIMIZATION,
+                    description=(
+                        f"Window operator '{node_id}' has high latency "
+                        f"({stats.avg_latency_ms:.0f}ms). Consider reducing "
+                        f"window size or switching to session windows."
+                    ),
+                    target_nodes=[node_id],
+                    params={
+                        "node_id": node_id,
+                        "suggested_window_type": "session",
+                        "current_latency_ms": stats.avg_latency_ms,
+                    },
+                    estimated_gain="~40% latency reduction",
+                    priority=60,
+                ))
+
+        return actions
+
+
 # Registry of all active optimization rules
 ALL_RULES: list[OptimizationRule] = [
     PredicatePushdownRule(),
     OperatorFusionRule(),
     AutoParallelRule(),
     BufferInsertionRule(),
+    WindowOptimizationRule(),
 ]
 
 

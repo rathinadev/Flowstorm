@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { usePipelineStore } from "../../store/pipelineStore";
 import { api } from "../../services/api";
-import type { PipelineVersion, PipelineDiff } from "../../types/pipeline";
+import type { PipelineDiff } from "../../types/pipeline";
 import { VisualDiff } from "./VisualDiff";
 
 const TRIGGER_COLORS: Record<string, string> = {

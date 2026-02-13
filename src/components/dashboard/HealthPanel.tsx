@@ -8,7 +8,7 @@ export function HealthPanel() {
 
   // Overall cluster health
   const avgHealth = workers.length > 0
-    ? workers.reduce((sum, w) => sum + 80, 0) / workers.length // Placeholder until real health
+    ? workers.reduce((sum, _w) => sum + 80, 0) / workers.length // Placeholder until real health
     : 0;
 
   const overallStatus = getHealthStatus(avgHealth);

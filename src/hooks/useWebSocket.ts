@@ -3,7 +3,7 @@ import { wsClient } from "../services/websocket";
 import { useMetricsStore } from "../store/metricsStore";
 import { useChaosStore } from "../store/chaosStore";
 import type { WSMessage } from "../types/websocket";
-import type { PipelineMetrics, HealingEvent, ChaosEvent, OptimizationEvent } from "../types/metrics";
+import type { PipelineMetrics, ChaosEvent, OptimizationEvent } from "../types/metrics";
 
 export function useWebSocket(pipelineId: string | null) {
   const cleanupRef = useRef<(() => void) | null>(null);

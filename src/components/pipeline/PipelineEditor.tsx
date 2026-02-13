@@ -7,7 +7,6 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   type Connection,
-  type Edge,
   type Node,
   type ReactFlowInstance,
 } from "reactflow";

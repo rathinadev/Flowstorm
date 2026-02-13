@@ -18,6 +18,7 @@ import { NodeConfigPanel } from "./NodeConfigPanel";
 import { usePipelineStore } from "../../store/pipelineStore";
 import { useMetricsStore } from "../../store/metricsStore";
 import { OPERATOR_LABELS, getNodeType, NODE_COLORS, type OperatorType } from "../../types/pipeline";
+import { getDemoNodes, getDemoEdges } from "../../data/demoPipeline";
 
 let nodeIdCounter = 0;
 function nextNodeId() {
@@ -46,8 +47,9 @@ export function PipelineEditor({ onDeploy, onStop, pipelineId, pipelineStatus }:
   const [reactFlowInstance, setReactFlowInstance] =
     useState<ReactFlowInstance | null>(null);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  // Load default demo pipeline so the editor isn't empty on open
+  const [nodes, setNodes, onNodesChange] = useNodesState(getDemoNodes());
+  const [edges, setEdges, onEdgesChange] = useEdgesState(getDemoEdges());
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const selectNode = usePipelineStore((s) => s.selectNode);

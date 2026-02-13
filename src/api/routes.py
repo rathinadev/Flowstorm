@@ -25,6 +25,7 @@ from src.api.websocket import (
 )
 from src.ab_testing.manager import ABTestManager
 from src.chaos.engine import ChaosEngine
+from src.demo.simulator import DemoSimulator
 from src.dlq.diagnostics import DLQDiagnostics
 from src.engine.runtime import RuntimeManager
 from src.models.pipeline import (
@@ -48,6 +49,7 @@ _event_forwarders: dict[str, PipelineEventForwarder] = {}
 _metrics_pushers: dict[str, MetricsPusher] = {}
 _ab_manager = ABTestManager()
 _dlq_diagnostics: DLQDiagnostics | None = None
+_demo_simulator: DemoSimulator | None = None
 
 
 def set_runtime_manager(manager: RuntimeManager) -> None:
@@ -478,3 +480,44 @@ async def get_prediction(pipeline_id: str):
     if not health_monitor:
         return {"recommendation": {"action": "none", "reason": "Monitor not running"}}
     return health_monitor.get_prediction(pipeline_id)
+
+
+# ---- Demo Mode ----
+
+@router.post("/demo/start")
+async def start_demo():
+    """Start the demo simulator with a pre-built IoT pipeline."""
+    global _demo_simulator
+    if _demo_simulator and _demo_simulator.is_running:
+        return _demo_simulator._get_pipeline_info()
+
+    _demo_simulator = DemoSimulator(ws_manager)
+    info = await _demo_simulator.start()
+    return info
+
+
+@router.post("/demo/stop")
+async def stop_demo():
+    """Stop the demo simulator."""
+    global _demo_simulator
+    if _demo_simulator:
+        await _demo_simulator.stop()
+        _demo_simulator = None
+    return {"status": "stopped"}
+
+
+@router.get("/demo/status")
+async def demo_status():
+    """Get demo simulator status."""
+    if _demo_simulator and _demo_simulator.is_running:
+        return _demo_simulator._get_pipeline_info()
+    return {"status": "stopped"}
+
+
+@router.post("/demo/chaos")
+async def toggle_demo_chaos(active: bool = True):
+    """Toggle chaos mode in the demo."""
+    if not _demo_simulator or not _demo_simulator.is_running:
+        raise HTTPException(status_code=400, detail="Demo not running")
+    _demo_simulator.set_chaos_active(active)
+    return {"chaos_active": active}

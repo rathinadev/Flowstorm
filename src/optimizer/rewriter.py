@@ -43,6 +43,8 @@ class DAGRewriter:
                 self._apply_parallel(dag, action)
             elif action.optimization_type == OptimizationType.BUFFER_INSERTION:
                 self._apply_buffer(dag, action)
+            elif action.optimization_type == OptimizationType.WINDOW_OPTIMIZATION:
+                self._apply_window_optimization(dag, action)
             else:
                 raise RewriteError(f"Unknown optimization type: {action.optimization_type}")
         except DAGValidationError as e:
@@ -172,3 +174,23 @@ class DAGRewriter:
         )
 
         dag.insert_node_between(buffer_node, source_id, target_id)
+
+    def _apply_window_optimization(self, dag: DAG, action: OptimizationAction) -> None:
+        """
+        Window optimization: change a window operator's type based on
+        memory/latency analysis (e.g. sliding -> tumbling or session).
+        """
+        node_id = action.params["node_id"]
+        suggested_type = action.params["suggested_window_type"]
+
+        node = dag.get_node(node_id)
+        if not node:
+            raise RewriteError(f"Window node not found: {node_id}")
+
+        logger.info(
+            f"OPTIMIZER: Switching window {node_id} to '{suggested_type}' "
+            f"(was '{node.config.window_type or 'sliding'}')"
+        )
+
+        # Update the window configuration
+        node.config.window_type = suggested_type

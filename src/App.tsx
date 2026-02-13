@@ -24,6 +24,7 @@ function App() {
   const [pipelineId, setPipelineId] = useState<string | null>(null);
   const [pipelineName, setPipelineName] = useState("Untitled Pipeline");
   const [pipelineStatus, setPipelineStatus] = useState<string>("draft");
+  const [demoRunning, setDemoRunning] = useState(false);
 
   useEffect(() => {
     window.location.hash = activeView;
@@ -31,6 +32,29 @@ function App() {
 
   // Connect WebSocket when pipeline is active
   useWebSocket(pipelineId);
+
+  const handleStartDemo = useCallback(async () => {
+    try {
+      const result = await api.startDemo();
+      setPipelineId(result.pipeline_id);
+      setPipelineName(result.name);
+      setPipelineStatus("running");
+      setDemoRunning(true);
+    } catch (err) {
+      console.error("Demo start failed:", err);
+    }
+  }, []);
+
+  const handleStopDemo = useCallback(async () => {
+    try {
+      await api.stopDemo();
+      setPipelineId(null);
+      setPipelineStatus("stopped");
+      setDemoRunning(false);
+    } catch (err) {
+      console.error("Demo stop failed:", err);
+    }
+  }, []);
 
   const handleDeploy = useCallback(
     async (nodes: Array<{
@@ -112,6 +136,9 @@ function App() {
         pipelineName={pipelineName}
         pipelineStatus={pipelineStatus}
         onNameChange={setPipelineName}
+        onStartDemo={handleStartDemo}
+        onStopDemo={handleStopDemo}
+        demoRunning={demoRunning}
       />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar activeView={activeView} onViewChange={setActiveView} />

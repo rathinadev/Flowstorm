@@ -16,9 +16,12 @@ interface HeaderProps {
   pipelineName: string;
   pipelineStatus: string;
   onNameChange: (name: string) => void;
+  onStartDemo?: () => void;
+  onStopDemo?: () => void;
+  demoRunning?: boolean;
 }
 
-export function Header({ pipelineId, pipelineName, pipelineStatus, onNameChange }: HeaderProps) {
+export function Header({ pipelineId, pipelineName, pipelineStatus, onNameChange, onStartDemo, onStopDemo, demoRunning }: HeaderProps) {
   const metrics = useMetricsStore((s) => s.metrics);
   const chaosActive = useChaosStore((s) => s.active);
   const [editing, setEditing] = useState(false);
@@ -102,6 +105,23 @@ export function Header({ pipelineId, pipelineName, pipelineStatus, onNameChange 
               CHAOS
             </span>
           </div>
+        )}
+
+        {/* Demo button */}
+        {demoRunning ? (
+          <button
+            onClick={onStopDemo}
+            className="px-3 py-1 rounded text-[10px] font-bold bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+          >
+            Stop Demo
+          </button>
+        ) : (
+          <button
+            onClick={onStartDemo}
+            className="px-3 py-1 rounded text-[10px] font-bold bg-flowstorm-primary/20 text-flowstorm-primary hover:bg-flowstorm-primary/30 transition-colors"
+          >
+            Start Demo
+          </button>
         )}
 
         {/* Connection status */}

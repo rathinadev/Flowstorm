@@ -170,6 +170,35 @@ export const api = {
     }>(`/pipelines/${id}/prediction`);
   },
 
+  // Demo Mode
+  startDemo() {
+    return request<{
+      pipeline_id: string;
+      name: string;
+      status: string;
+      nodes: Array<{
+        id: string;
+        label: string;
+        operator_type: string;
+        node_type: string;
+      }>;
+      edges: Array<{ source: string; target: string }>;
+      workers: number;
+    }>("/demo/start", { method: "POST" });
+  },
+
+  stopDemo() {
+    return request("/demo/stop", { method: "POST" });
+  },
+
+  getDemoStatus() {
+    return request<{ status: string; pipeline_id?: string }>("/demo/status");
+  },
+
+  toggleDemoChaos(active: boolean) {
+    return request(`/demo/chaos?active=${active}`, { method: "POST" });
+  },
+
   // Server health
   healthCheck() {
     return request<{

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -16,6 +16,7 @@ import { edgeTypes } from "./CustomEdges";
 import { NodePalette } from "./NodePalette";
 import { NodeConfigPanel } from "./NodeConfigPanel";
 import { usePipelineStore } from "../../store/pipelineStore";
+import { useMetricsStore } from "../../store/metricsStore";
 import { OPERATOR_LABELS, getNodeType, NODE_COLORS, type OperatorType } from "../../types/pipeline";
 
 let nodeIdCounter = 0;
@@ -50,6 +51,27 @@ export function PipelineEditor({ onDeploy, onStop, pipelineId, pipelineStatus }:
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
 
   const selectNode = usePipelineStore((s) => s.selectNode);
+  const metrics = useMetricsStore((s) => s.metrics);
+
+  // Update edge data with live throughput from metrics
+  useEffect(() => {
+    if (!metrics?.workers) return;
+
+    // Build a map of node_id -> events_per_second from worker metrics
+    const nodeEps: Record<string, number> = {};
+    for (const wm of Object.values(metrics.workers)) {
+      nodeEps[wm.node_id] = (nodeEps[wm.node_id] || 0) + wm.events_per_second;
+    }
+
+    setEdges((eds) =>
+      eds.map((e) => {
+        // Use the source node's throughput as the edge throughput
+        const eps = nodeEps[e.source] || 0;
+        if (eps === (e.data?.events_per_second || 0)) return e;
+        return { ...e, data: { ...e.data, events_per_second: eps } };
+      })
+    );
+  }, [metrics, setEdges]);
 
   const onConnect = useCallback(
     (params: Connection) => {

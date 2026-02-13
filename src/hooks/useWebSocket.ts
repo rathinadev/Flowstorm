@@ -8,6 +8,7 @@ import type { PipelineMetrics, ChaosEvent, OptimizationEvent } from "../types/me
 export function useWebSocket(pipelineId: string | null) {
   const cleanupRef = useRef<(() => void) | null>(null);
   const setMetrics = useMetricsStore((s) => s.setMetrics);
+  const setWorkerHealth = useMetricsStore((s) => s.setWorkerHealth);
   const addHealingEvent = useMetricsStore((s) => s.addHealingEvent);
   const addOptimizationEvent = useMetricsStore((s) => s.addOptimizationEvent);
   const addChaosEvent = useChaosStore((s) => s.addEvent);
@@ -23,7 +24,33 @@ export function useWebSocket(pipelineId: string | null) {
     unsubs.push(
       wsClient.on("pipeline.metrics", (msg: WSMessage) => {
         if (msg.data) {
-          setMetrics(msg.data as unknown as PipelineMetrics);
+          const metrics = msg.data as unknown as PipelineMetrics;
+          setMetrics(metrics);
+
+          // Derive worker health from metrics and update store
+          if (metrics.workers) {
+            for (const [workerId, wm] of Object.entries(metrics.workers)) {
+              const cpuScore = Math.max(0, 100 - wm.cpu_percent);
+              const memScore = wm.memory_percent < 60 ? 100 : Math.max(0, 100 - (wm.memory_percent - 60) * 2.5);
+              const latScore = wm.avg_latency_ms < 50 ? 100 : wm.avg_latency_ms < 500 ? 100 - ((wm.avg_latency_ms - 50) / 450) * 100 : 0;
+              const score = cpuScore * 0.3 + memScore * 0.3 + 100 * 0.2 + latScore * 0.2;
+
+              const issues: string[] = [];
+              if (wm.cpu_percent > 80) issues.push(`High CPU: ${wm.cpu_percent.toFixed(0)}%`);
+              if (wm.memory_percent > 75) issues.push(`High memory: ${wm.memory_percent.toFixed(0)}%`);
+              if (wm.avg_latency_ms > 200) issues.push(`High latency: ${wm.avg_latency_ms.toFixed(0)}ms`);
+
+              setWorkerHealth(workerId, {
+                worker_id: workerId,
+                node_id: wm.node_id,
+                operator_type: "",
+                status: score >= 70 ? "running" : score >= 30 ? "degraded" : "critical",
+                health_score: Math.round(score * 10) / 10,
+                metrics: wm,
+                issues,
+              });
+            }
+          }
         }
       })
     );
@@ -94,7 +121,7 @@ export function useWebSocket(pipelineId: string | null) {
     return () => {
       cleanupRef.current?.();
     };
-  }, [pipelineId, setMetrics, addHealingEvent, addOptimizationEvent, addChaosEvent, setChaosActive]);
+  }, [pipelineId, setMetrics, setWorkerHealth, addHealingEvent, addOptimizationEvent, addChaosEvent, setChaosActive]);
 
   return { connected: wsClient.connected };
 }

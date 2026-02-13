@@ -6,10 +6,12 @@ import { Dashboard } from "./components/dashboard/Dashboard";
 import { ChaosPanel } from "./components/chaos/ChaosPanel";
 import { LineagePanel } from "./components/lineage/LineagePanel";
 import { VersionHistory } from "./components/git/VersionHistory";
+import { DLQPanel } from "./components/dlq/DLQPanel";
+import { ABTestPanel } from "./components/ab/ABTestPanel";
 import { useWebSocket } from "./hooks/useWebSocket";
 import { api } from "./services/api";
 
-const VALID_VIEWS: View[] = ["pipeline", "dashboard", "chaos", "lineage", "git"];
+const VALID_VIEWS: View[] = ["pipeline", "dashboard", "chaos", "lineage", "git", "dlq", "ab"];
 
 function getInitialView(): View {
   const hash = window.location.hash.replace("#", "");
@@ -87,6 +89,10 @@ function App() {
         return <LineagePanel pipelineId={pipelineId} />;
       case "git":
         return <VersionHistory pipelineId={pipelineId} />;
+      case "dlq":
+        return <DLQPanel pipelineId={pipelineId} />;
+      case "ab":
+        return <ABTestPanel pipelineId={pipelineId} />;
       default:
         return (
           <PipelineEditor

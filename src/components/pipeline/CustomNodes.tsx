@@ -20,7 +20,15 @@ function FlowStormNode({ data, selected }: NodeProps<FlowStormNodeData>) {
     ? Object.values(metrics.workers).find((w) => w.node_id === data.nodeId)
     : null;
 
-  const healthScore = workerMetrics ? 80 : 0; // Will be replaced with real health
+  // Use real health score from worker health data or derive from metrics
+  const workerHealth = useMetricsStore((s) =>
+    workerMetrics ? s.workerHealth[workerMetrics.worker_id] : null
+  );
+  const healthScore = workerHealth
+    ? workerHealth.health_score
+    : workerMetrics
+    ? Math.max(0, 100 - workerMetrics.cpu_percent * 0.3 - (workerMetrics.avg_latency_ms > 200 ? 30 : 0) - (workerMetrics.errors > 0 ? 20 : 0))
+    : 0;
   const healthStatus = workerMetrics ? getHealthStatus(healthScore) : "dead";
   const borderColor = workerMetrics
     ? HEALTH_COLORS[healthStatus]

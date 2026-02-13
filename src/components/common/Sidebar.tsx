@@ -3,7 +3,9 @@ type View =
   | "dashboard"
   | "chaos"
   | "lineage"
-  | "git";
+  | "git"
+  | "dlq"
+  | "ab";
 
 interface NavItem {
   id: View;
@@ -42,6 +44,18 @@ const NAV_ITEMS: NavItem[] = [
     label: "Git",
     icon: "G",
     description: "Version history",
+  },
+  {
+    id: "dlq",
+    label: "DLQ",
+    icon: "Q",
+    description: "Dead letter queue",
+  },
+  {
+    id: "ab",
+    label: "A/B",
+    icon: "AB",
+    description: "A/B pipeline testing",
   },
 ];
 

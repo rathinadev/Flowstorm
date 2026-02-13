@@ -110,6 +110,66 @@ export const api = {
     );
   },
 
+  // Dead Letter Queue
+  getDLQ(id: string, count = 100) {
+    return request<{
+      entries: Array<{
+        event_id: string;
+        node_id: string;
+        error_message: string;
+        failure_type: string;
+        suggestions: string[];
+        event_data: Record<string, unknown>;
+        timestamp: string;
+      }>;
+      total: number;
+    }>(`/pipelines/${id}/dlq?count=${count}`);
+  },
+
+  getDLQStats(id: string) {
+    return request<{
+      pipeline_id: string;
+      total_failed: number;
+      groups: Array<{
+        failure_type: string;
+        count: number;
+        affected_nodes: string[];
+        suggestions: string[];
+      }>;
+      by_node: Record<string, number>;
+    }>(`/pipelines/${id}/dlq/stats`);
+  },
+
+  // A/B Testing
+  createABTest(pipelineIdA: string, pipelineIdB: string, splitPercent = 50, name = "") {
+    return request(`/ab-tests?pipeline_id_a=${pipelineIdA}&pipeline_id_b=${pipelineIdB}&split_percent=${splitPercent}&name=${encodeURIComponent(name)}`, {
+      method: "POST",
+    });
+  },
+
+  listABTests() {
+    return request<{ tests: Array<Record<string, unknown>> }>("/ab-tests");
+  },
+
+  getABTest(testId: string) {
+    return request(`/ab-tests/${testId}`);
+  },
+
+  stopABTest(testId: string) {
+    return request(`/ab-tests/${testId}`, { method: "DELETE" });
+  },
+
+  // Predictive Scaling
+  getPrediction(id: string) {
+    return request<{
+      predicted_eps: number;
+      current_eps: number;
+      trend: string;
+      confidence: string;
+      recommendation: { action: string; reason: string; scale_factor?: number };
+    }>(`/pipelines/${id}/prediction`);
+  },
+
   // Server health
   healthCheck() {
     return request<{

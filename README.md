@@ -16,7 +16,6 @@ graph TD
         MP[Metrics Panel]
         HP[Health Panel]
         CP[Chaos Panel]
-        NC[NLP Chat]
         LV[Lineage Viewer]
         VH[Version History]
     end
@@ -60,9 +59,6 @@ src/
 │   ├── chaos/                   # Chaos engineering UI
 │   │   ├── ChaosPanel.tsx       # Chaos mode controls
 │   │   └── ChaosControls.tsx    # Intensity slider, toggles
-│   ├── nlp/                     # Natural language
-│   │   ├── NLPChat.tsx          # Chat interface
-│   │   └── CommandHistory.tsx   # Previous commands
 │   ├── lineage/                 # Data lineage
 │   │   ├── LineagePanel.tsx     # Lineage viewer
 │   │   └── EventTrace.tsx       # Single event trace
@@ -164,5 +160,4 @@ The frontend subscribes to real-time events from the backend:
 | `optimizer.applied` | DAG optimization | Before/after animation |
 | `chaos.event` | Chaos action triggered | Flash affected node |
 | `chaos.healed` | Self-healed from chaos | Recovery animation |
-| `nlp.result` | NLP command processed | New nodes appear |
 | `pipeline_git.version` | New version created | Version list update |

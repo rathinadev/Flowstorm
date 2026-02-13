@@ -2,7 +2,6 @@ type View =
   | "pipeline"
   | "dashboard"
   | "chaos"
-  | "nlp"
   | "lineage"
   | "git";
 
@@ -31,12 +30,6 @@ const NAV_ITEMS: NavItem[] = [
     label: "Chaos",
     icon: "C",
     description: "Chaos engineering",
-  },
-  {
-    id: "nlp",
-    label: "NLP",
-    icon: "N",
-    description: "Natural language editor",
   },
   {
     id: "lineage",

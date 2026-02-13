@@ -69,14 +69,6 @@ export const api = {
     );
   },
 
-  // NLP
-  sendNLPCommand(id: string, text: string) {
-    return request(`/pipelines/${id}/nlp`, {
-      method: "POST",
-      body: JSON.stringify({ text }),
-    });
-  },
-
   // Pipeline Git
   getVersions(id: string) {
     return request<

@@ -8,7 +8,6 @@ const TRIGGER_COLORS: Record<string, string> = {
   USER: "#3b82f6",
   AUTO_OPTIMIZE: "#8b5cf6",
   AUTO_HEAL: "#22c55e",
-  NLP_COMMAND: "#f59e0b",
   ROLLBACK: "#ef4444",
 };
 
@@ -16,7 +15,6 @@ const TRIGGER_LABELS: Record<string, string> = {
   USER: "Manual",
   AUTO_OPTIMIZE: "Auto-Optimize",
   AUTO_HEAL: "Auto-Heal",
-  NLP_COMMAND: "NLP",
   ROLLBACK: "Rollback",
 };
 

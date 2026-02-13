@@ -13,7 +13,6 @@ export type WSMessageType =
   | "chaos.stopped"
   | "chaos.event"
   | "chaos.healed"
-  | "nlp.result"
   | "pipeline_git.version"
   | "pong"
   | "subscribed";

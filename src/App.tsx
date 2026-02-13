@@ -4,12 +4,11 @@ import { Sidebar, type View } from "./components/common/Sidebar";
 import { PipelineEditor } from "./components/pipeline/PipelineEditor";
 import { Dashboard } from "./components/dashboard/Dashboard";
 import { ChaosPanel } from "./components/chaos/ChaosPanel";
-import { NLPChat } from "./components/nlp/NLPChat";
 import { LineagePanel } from "./components/lineage/LineagePanel";
 import { VersionHistory } from "./components/git/VersionHistory";
 import { useWebSocket } from "./hooks/useWebSocket";
 
-const VALID_VIEWS: View[] = ["pipeline", "dashboard", "chaos", "nlp", "lineage", "git"];
+const VALID_VIEWS: View[] = ["pipeline", "dashboard", "chaos", "lineage", "git"];
 
 function getInitialView(): View {
   const hash = window.location.hash.replace("#", "");
@@ -37,8 +36,6 @@ function App() {
         return <Dashboard />;
       case "chaos":
         return <ChaosPanel pipelineId={pipelineId} />;
-      case "nlp":
-        return <NLPChat pipelineId={pipelineId} />;
       case "lineage":
         return <LineagePanel pipelineId={pipelineId} />;
       case "git":

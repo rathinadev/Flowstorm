@@ -13,7 +13,6 @@ from typing import Any
 
 from src.models.pipeline import (
     NodeType,
-    OperatorType,
     Pipeline,
     PipelineEdge,
     PipelineNode,
@@ -273,9 +272,9 @@ class DAG:
                 f"Cannot swap: no direct edge from {node_a_id} to {node_b_id}"
             )
 
-        # Get A's upstream and B's downstream
-        a_upstream = self.get_upstream(node_a_id)
-        b_downstream = self.get_downstream(node_b_id)
+        # Get A's upstream and B's downstream (copy to avoid mutation during rewire)
+        a_upstream = list(self.get_upstream(node_a_id))
+        b_downstream = list(self.get_downstream(node_b_id))
 
         # Remove all edges involving A and B
         for up_id in a_upstream:
@@ -301,8 +300,8 @@ class DAG:
         if not original:
             raise DAGValidationError(f"Node {node_id} not found")
 
-        upstream_ids = self.get_upstream(node_id)
-        downstream_ids = self.get_downstream(node_id)
+        upstream_ids = list(self.get_upstream(node_id))
+        downstream_ids = list(self.get_downstream(node_id))
 
         # Remove the original node
         self.remove_node(node_id)

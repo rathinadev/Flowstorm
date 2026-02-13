@@ -28,7 +28,6 @@ graph TD
     subgraph Support["Support Systems"]
         PG[Pipeline Git]
         CKP[Checkpoint Manager]
-        NLP[NLP Parser]
         DLQ[Dead Letter Queue]
     end
 
@@ -69,13 +68,10 @@ src/
 │   ├── rules.py         # Optimization rules
 │   ├── rewriter.py      # DAG transformation
 │   └── migrator.py      # Live migration
-├── nlp/                 # Natural language features
-│   ├── parser.py        # LLM integration
-│   └── mapper.py        # Intent -> operations
 ├── pipeline_git/        # Version control
 │   ├── versioner.py     # Version management
 │   ├── differ.py        # Diff generation
-│   └── store.py         # SQLite storage
+│   └── store.py         # Redis version storage
 ├── checkpoint/          # State management
 │   ├── manager.py       # Checkpoint coordination
 │   └── store.py         # Redis checkpoint store
@@ -121,7 +117,6 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 | GET | `/api/pipelines/{id}` | Get pipeline status |
 | DELETE | `/api/pipelines/{id}` | Stop and remove pipeline |
 | POST | `/api/pipelines/{id}/chaos` | Start chaos mode |
-| POST | `/api/pipelines/{id}/nlp` | NLP command |
 | GET | `/api/pipelines/{id}/versions` | Pipeline version history |
 | POST | `/api/pipelines/{id}/rollback` | Rollback to version |
 | GET | `/api/pipelines/{id}/lineage/{event_id}` | Event lineage trace |
@@ -134,5 +129,5 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 - **redis**: Message transport + state store
 - **docker**: Worker container orchestration
 - **paho-mqtt**: MQTT client for IoT sources
-- **httpx**: Async HTTP client for LLM API
+- **httpx**: Async HTTP client (webhook sinks)
 - **pydantic**: Data validation and schemas

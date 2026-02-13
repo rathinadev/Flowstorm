@@ -38,11 +38,6 @@ class Settings:
     # Checkpoint
     CHECKPOINT_EVERY_N_EVENTS: int = int(os.getenv("CHECKPOINT_EVERY_N_EVENTS", "1000"))
 
-    # NLP / LLM
-    LLM_API_URL: str = os.getenv("LLM_API_URL", "https://api.anthropic.com/v1/messages")
-    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-    LLM_MODEL: str = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
-
     # Chaos Engine
     CHAOS_MIN_INTERVAL_S: int = int(os.getenv("CHAOS_MIN_INTERVAL_S", "5"))
     CHAOS_MAX_INTERVAL_S: int = int(os.getenv("CHAOS_MAX_INTERVAL_S", "15"))

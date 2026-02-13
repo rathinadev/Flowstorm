@@ -13,8 +13,6 @@ from src.api.schemas import (
     ChaosResponse,
     CreatePipelineRequest,
     HealingEventResponse,
-    NLPCommandRequest,
-    NLPCommandResponse,
     PipelineResponse,
     PipelineStatusResponse,
     PipelineVersionResponse,
@@ -34,8 +32,6 @@ from src.models.pipeline import (
     PipelineNode,
     OperatorType,
 )
-from src.nlp.mapper import NLPMapper
-from src.nlp.parser import NLPParser
 from src.pipeline_git.versioner import PipelineVersioner, VersionTrigger
 
 logger = logging.getLogger(__name__)
@@ -45,8 +41,6 @@ router = APIRouter(prefix="/api")
 # Injected via set_* functions from main.py
 _runtime_manager: RuntimeManager | None = None
 _versioner: PipelineVersioner | None = None
-_nlp_parser: NLPParser | None = None
-_nlp_mapper: NLPMapper | None = None
 _chaos_engines: dict[str, ChaosEngine] = {}
 _event_forwarders: dict[str, PipelineEventForwarder] = {}
 _metrics_pushers: dict[str, MetricsPusher] = {}
@@ -60,12 +54,6 @@ def set_runtime_manager(manager: RuntimeManager) -> None:
 def set_versioner(versioner: PipelineVersioner) -> None:
     global _versioner
     _versioner = versioner
-
-
-def set_nlp(parser: NLPParser, mapper: NLPMapper) -> None:
-    global _nlp_parser, _nlp_mapper
-    _nlp_parser = parser
-    _nlp_mapper = mapper
 
 
 def _get_manager() -> RuntimeManager:
@@ -214,50 +202,6 @@ async def get_chaos_history(pipeline_id: str):
     if chaos:
         return {"events": chaos.get_history()}
     return {"events": []}
-
-
-# ---- NLP ----
-
-@router.post("/pipelines/{pipeline_id}/nlp", response_model=NLPCommandResponse)
-async def nlp_command(pipeline_id: str, request: NLPCommandRequest):
-    """Process a natural language command to modify the pipeline."""
-    manager = _get_manager()
-    runtime = manager.get_runtime(pipeline_id)
-    if not runtime:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
-
-    if not _nlp_parser or not _nlp_mapper:
-        raise HTTPException(status_code=503, detail="NLP not initialized")
-
-    # Get current pipeline state
-    current_state = runtime.dag.snapshot()
-
-    # Parse the command
-    parsed = await _nlp_parser.parse(request.text, current_state)
-
-    if not parsed.get("actions"):
-        return NLPCommandResponse(
-            success=False,
-            interpretation=parsed.get("interpretation", "Could not understand"),
-            changes=[],
-        )
-
-    # Apply the actions to the DAG
-    changes = _nlp_mapper.apply_actions(runtime.dag, parsed)
-
-    # Save version
-    if _versioner:
-        await _versioner.save_nlp_version(
-            runtime.dag,
-            user_command=request.text,
-            changes_description=parsed.get("interpretation", ""),
-        )
-
-    return NLPCommandResponse(
-        success=True,
-        interpretation=parsed.get("interpretation", ""),
-        changes=[changes],
-    )
 
 
 # ---- Pipeline Git ----

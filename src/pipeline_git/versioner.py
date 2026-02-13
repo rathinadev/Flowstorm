@@ -22,7 +22,6 @@ class VersionTrigger:
     USER = "USER"
     AUTO_OPTIMIZE = "AUTO_OPTIMIZE"
     AUTO_HEAL = "AUTO_HEAL"
-    NLP_COMMAND = "NLP_COMMAND"
     AB_TEST = "AB_TEST"
     ROLLBACK = "ROLLBACK"
 
@@ -156,19 +155,6 @@ class PipelineVersioner:
             dag,
             trigger=VersionTrigger.AUTO_HEAL,
             description=f"[HEAL:{healing_action}] {description}",
-        )
-
-    async def save_nlp_version(
-        self,
-        dag: DAG,
-        user_command: str,
-        changes_description: str,
-    ) -> int:
-        """Save a version after an NLP command modifies the pipeline."""
-        return await self.save_version(
-            dag,
-            trigger=VersionTrigger.NLP_COMMAND,
-            description=f'NLP: "{user_command}" -> {changes_description}',
         )
 
     async def save_rollback_version(

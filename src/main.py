@@ -2,7 +2,7 @@
 
 Main FastAPI application entry point.
 Wires together all subsystems: runtime, health monitor, optimizer,
-chaos engine, pipeline git, NLP parser.
+chaos engine, pipeline git.
 """
 
 import logging
@@ -12,11 +12,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import settings
-from src.api.routes import router, set_runtime_manager, set_versioner, set_nlp
+from src.api.routes import router, set_runtime_manager, set_versioner
 from src.engine.runtime import RuntimeManager
 from src.health.monitor import HealthMonitor
-from src.nlp.mapper import NLPMapper
-from src.nlp.parser import NLPParser
 from src.pipeline_git.versioner import PipelineVersioner
 
 logging.basicConfig(
@@ -59,11 +57,6 @@ async def lifespan(app: FastAPI):
     versioner = PipelineVersioner()
     await versioner.initialize()
     set_versioner(versioner)
-
-    # Initialize NLP parser and mapper
-    nlp_parser = NLPParser()
-    nlp_mapper = NLPMapper()
-    set_nlp(nlp_parser, nlp_mapper)
 
     logger.info("FlowStorm engine ready.")
 

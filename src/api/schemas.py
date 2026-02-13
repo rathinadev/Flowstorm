@@ -52,21 +52,6 @@ class PipelineStatusResponse(BaseModel):
     stream_keys: list[str]
 
 
-# ---- NLP ----
-
-class NLPCommandRequest(BaseModel):
-    text: str
-
-
-class NLPCommandResponse(BaseModel):
-    success: bool
-    interpretation: str
-    changes: list[dict[str, Any]] = Field(default_factory=list)
-    new_nodes: list[NodeSchema] = Field(default_factory=list)
-    new_edges: list[EdgeSchema] = Field(default_factory=list)
-    removed_nodes: list[str] = Field(default_factory=list)
-
-
 # ---- Chaos ----
 
 class ChaosRequest(BaseModel):

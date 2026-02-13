@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Header } from "./components/common/Header";
 import { Sidebar, type View } from "./components/common/Sidebar";
 import { PipelineEditor } from "./components/pipeline/PipelineEditor";
@@ -9,10 +9,22 @@ import { LineagePanel } from "./components/lineage/LineagePanel";
 import { VersionHistory } from "./components/git/VersionHistory";
 import { useWebSocket } from "./hooks/useWebSocket";
 
+const VALID_VIEWS: View[] = ["pipeline", "dashboard", "chaos", "nlp", "lineage", "git"];
+
+function getInitialView(): View {
+  const hash = window.location.hash.replace("#", "");
+  if (VALID_VIEWS.includes(hash as View)) return hash as View;
+  return "pipeline";
+}
+
 function App() {
-  const [activeView, setActiveView] = useState<View>("pipeline");
+  const [activeView, setActiveView] = useState<View>(getInitialView);
   const [pipelineId] = useState<string | null>(null);
   const [pipelineName] = useState("Demo Pipeline");
+
+  useEffect(() => {
+    window.location.hash = activeView;
+  }, [activeView]);
 
   // Connect WebSocket when pipeline is active
   useWebSocket(pipelineId);

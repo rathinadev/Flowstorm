@@ -3,12 +3,18 @@ import { getHealthStatus, HEALTH_COLORS } from "../../types/metrics";
 
 export function HealthPanel() {
   const metrics = useMetricsStore((s) => s.metrics);
+  const workerHealth = useMetricsStore((s) => s.workerHealth);
 
   const workers = metrics?.workers ? Object.values(metrics.workers) : [];
 
-  // Overall cluster health
-  const avgHealth = workers.length > 0
-    ? workers.reduce((sum, _w) => sum + 80, 0) / workers.length // Placeholder until real health
+  // Compute real health per worker from workerHealth store
+  const workerScores = workers.map((w) => {
+    const health = workerHealth[w.worker_id];
+    return health?.health_score ?? 0;
+  });
+
+  const avgHealth = workerScores.length > 0
+    ? workerScores.reduce((sum, s) => sum + s, 0) / workerScores.length
     : 0;
 
   const overallStatus = getHealthStatus(avgHealth);
@@ -45,7 +51,9 @@ export function HealthPanel() {
           <p className="text-xs text-flowstorm-muted">No active workers</p>
         )}
         {workers.map((w) => {
-          const status = getHealthStatus(80);
+          const health = workerHealth[w.worker_id];
+          const score = health?.health_score ?? 0;
+          const status = getHealthStatus(score);
           return (
             <div
               key={w.worker_id}
@@ -62,6 +70,9 @@ export function HealthPanel() {
                 <div className="text-[10px] text-flowstorm-muted">
                   {w.events_per_second?.toFixed(0)} e/s | {w.avg_latency_ms?.toFixed(0)}ms
                 </div>
+              </div>
+              <div className="text-xs font-mono" style={{ color: HEALTH_COLORS[status] }}>
+                {score.toFixed(0)}%
               </div>
               <div className="text-xs font-mono text-flowstorm-muted">
                 CPU {w.cpu_percent?.toFixed(0)}%

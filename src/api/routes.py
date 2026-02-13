@@ -215,6 +215,10 @@ async def get_chaos_history(pipeline_id: str):
 @router.get("/pipelines/{pipeline_id}/versions")
 async def get_versions(pipeline_id: str):
     """Get pipeline version history."""
+    # Return demo version history
+    if _demo_simulator and _demo_simulator.is_running:
+        return _demo_simulator.get_demo_versions()
+
     if not _versioner:
         return []
 
@@ -276,6 +280,10 @@ async def rollback_pipeline(pipeline_id: str, request: RollbackRequest):
 @router.get("/pipelines/{pipeline_id}/lineage/{event_id}")
 async def get_lineage(pipeline_id: str, event_id: str):
     """Trace an event's lineage through the pipeline."""
+    # Return demo lineage data
+    if _demo_simulator and _demo_simulator.is_running:
+        return _demo_simulator.get_demo_lineage(event_id)
+
     manager = _get_manager()
     runtime = manager.get_runtime(pipeline_id)
     if not runtime:
@@ -402,6 +410,11 @@ async def websocket_endpoint(websocket: WebSocket, pipeline_id: str):
 @router.get("/pipelines/{pipeline_id}/dlq")
 async def get_dlq(pipeline_id: str, count: int = 100):
     """Get dead letter queue entries with diagnostics."""
+    # Return demo data if demo simulator is running
+    if _demo_simulator and _demo_simulator.is_running:
+        entries = _demo_simulator.get_demo_dlq_entries(count)
+        return {"entries": entries, "total": len(entries)}
+
     manager = _get_manager()
     if not manager.redis:
         return {"entries": [], "total": 0}
@@ -420,6 +433,10 @@ async def get_dlq(pipeline_id: str, count: int = 100):
 @router.get("/pipelines/{pipeline_id}/dlq/stats")
 async def get_dlq_stats(pipeline_id: str):
     """Get aggregated DLQ statistics grouped by failure type."""
+    # Return demo data if demo simulator is running
+    if _demo_simulator and _demo_simulator.is_running:
+        return _demo_simulator.get_demo_dlq_stats()
+
     manager = _get_manager()
     if not manager.redis:
         return {"total_failed": 0, "groups": [], "by_node": {}}

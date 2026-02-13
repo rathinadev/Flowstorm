@@ -386,3 +386,219 @@ class DemoSimulator:
     def set_chaos_active(self, active: bool) -> None:
         """Toggle chaos mode."""
         self._chaos_active = active
+
+    # ---- Demo DLQ Data ----
+
+    def get_demo_dlq_entries(self, count: int = 50) -> list[dict]:
+        """Return realistic demo DLQ entries."""
+        errors = [
+            {
+                "node_id": "flt-temp",
+                "error_message": "KeyError: 'temperature' - missing field in event payload",
+                "failure_type": "missing_field",
+                "suggestions": [
+                    "Add a default value for 'temperature' in the filter config",
+                    "Add schema validation before the filter operator",
+                    "Check the source schema for missing fields",
+                ],
+            },
+            {
+                "node_id": "map-enrich",
+                "error_message": "TypeError: expected float, got str for field 'latitude'",
+                "failure_type": "type_mismatch",
+                "suggestions": [
+                    "Add type coercion in the map operator",
+                    "Validate field types at the source operator",
+                    "Add a schema enforcement step before enrichment",
+                ],
+            },
+            {
+                "node_id": "win-5m",
+                "error_message": "NullPointerError: 'sensor_id' is null",
+                "failure_type": "null_value",
+                "suggestions": [
+                    "Add null check for 'sensor_id' before windowing",
+                    "Filter out events with null keys before the window operator",
+                    "Set a default sensor_id for events missing the field",
+                ],
+            },
+            {
+                "node_id": "agg-avg",
+                "error_message": "AggregationError: division by zero in avg() - empty window",
+                "failure_type": "operator_error",
+                "suggestions": [
+                    "Add guard for empty windows in aggregation",
+                    "Use a minimum window size threshold",
+                    "Return null/skip instead of erroring on empty windows",
+                ],
+            },
+            {
+                "node_id": "flt-temp",
+                "error_message": "SchemaValidationError: unexpected field 'temp_celsius' (expected 'temperature')",
+                "failure_type": "schema_violation",
+                "suggestions": [
+                    "Update filter to accept 'temp_celsius' as an alias",
+                    "Add a field mapping step before the filter",
+                    "Fix the source to emit 'temperature' instead of 'temp_celsius'",
+                ],
+            },
+            {
+                "node_id": "sink-redis",
+                "error_message": "TimeoutError: Redis write timed out after 5000ms",
+                "failure_type": "timeout",
+                "suggestions": [
+                    "Increase Redis write timeout",
+                    "Check Redis server load and connection pool",
+                    "Add retry logic with exponential backoff",
+                ],
+            },
+        ]
+
+        entries = []
+        base_time = datetime.utcnow()
+        for i in range(min(count, 30)):
+            err = errors[i % len(errors)]
+            entries.append({
+                "event_id": f"evt-dlq-{1000 + i}",
+                "node_id": err["node_id"],
+                "error_message": err["error_message"],
+                "failure_type": err["failure_type"],
+                "suggestions": err["suggestions"],
+                "timestamp": (
+                    base_time - __import__("datetime").timedelta(seconds=i * 12)
+                ).isoformat(),
+            })
+        return entries
+
+    def get_demo_versions(self) -> list[dict]:
+        """Return realistic demo pipeline version history."""
+        from datetime import timedelta
+        base_time = datetime.utcnow()
+        return [
+            {
+                "version_id": 5,
+                "trigger": "AUTO_OPTIMIZE",
+                "description": "[auto_parallel] Parallelized 'Enrich Location' to 3 instances (~3x throughput)",
+                "timestamp": (base_time - timedelta(minutes=2)).isoformat(),
+                "node_count": 7,
+                "edge_count": 6,
+            },
+            {
+                "version_id": 4,
+                "trigger": "AUTO_HEAL",
+                "description": "[HEAL:failover] Worker w-win-5m died, respawned with checkpoint recovery",
+                "timestamp": (base_time - timedelta(minutes=8)).isoformat(),
+                "node_count": 7,
+                "edge_count": 6,
+            },
+            {
+                "version_id": 3,
+                "trigger": "AUTO_OPTIMIZE",
+                "description": "[predicate_pushdown] Pushed filter 'Temp > 30C' before window aggregation (~10x cost reduction)",
+                "timestamp": (base_time - timedelta(minutes=15)).isoformat(),
+                "node_count": 7,
+                "edge_count": 6,
+            },
+            {
+                "version_id": 2,
+                "trigger": "USER",
+                "description": "Added alert sink for temperature anomaly notifications",
+                "timestamp": (base_time - timedelta(minutes=30)).isoformat(),
+                "node_count": 7,
+                "edge_count": 6,
+            },
+            {
+                "version_id": 1,
+                "trigger": "USER",
+                "description": "Pipeline created and deployed",
+                "timestamp": (base_time - timedelta(hours=1)).isoformat(),
+                "node_count": 6,
+                "edge_count": 5,
+            },
+        ]
+
+    def get_demo_lineage(self, event_id: str) -> dict:
+        """Return realistic demo event lineage."""
+        return {
+            "event_id": event_id,
+            "data": {
+                "sensor_id": "sensor-42",
+                "temperature": 34.7,
+                "humidity": 65.2,
+                "location": "Building A, Floor 3",
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+            "lineage": [
+                {
+                    "node_id": "src-mqtt",
+                    "operator_type": "mqtt_source",
+                    "action": "ingested",
+                    "details": "Received from topic sensors/temperature",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                {
+                    "node_id": "flt-temp",
+                    "operator_type": "filter",
+                    "action": "filtered_pass",
+                    "details": "temperature (34.7) > 30: PASS",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                {
+                    "node_id": "map-enrich",
+                    "operator_type": "map",
+                    "action": "transformed",
+                    "details": "Enriched with location: Building A, Floor 3",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                {
+                    "node_id": "win-5m",
+                    "operator_type": "window",
+                    "action": "buffered",
+                    "details": "Added to 5min tumbling window (42/156 events)",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                {
+                    "node_id": "agg-avg",
+                    "operator_type": "aggregate",
+                    "action": "aggregated",
+                    "details": "Window avg: 32.1C (156 events)",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+                {
+                    "node_id": "sink-redis",
+                    "operator_type": "redis_sink",
+                    "action": "emitted",
+                    "details": "Written to key flowstorm:output:avg_temperature",
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            ],
+            "node_path": ["src-mqtt", "flt-temp", "map-enrich", "win-5m", "agg-avg", "sink-redis"],
+        }
+
+    def get_demo_dlq_stats(self) -> dict:
+        """Return realistic demo DLQ stats."""
+        entries = self.get_demo_dlq_entries()
+        groups: dict[str, dict] = {}
+        by_node: dict[str, int] = {}
+
+        for e in entries:
+            ft = e["failure_type"]
+            if ft not in groups:
+                groups[ft] = {
+                    "failure_type": ft,
+                    "count": 0,
+                    "affected_nodes": [],
+                    "suggestions": e["suggestions"],
+                }
+            groups[ft]["count"] += 1
+            if e["node_id"] not in groups[ft]["affected_nodes"]:
+                groups[ft]["affected_nodes"].append(e["node_id"])
+
+            by_node[e["node_id"]] = by_node.get(e["node_id"], 0) + 1
+
+        return {
+            "pipeline_id": self.pipeline_id,
+            "total_failed": len(entries),
+            "groups": list(groups.values()),
+            "by_node": by_node,
+        }

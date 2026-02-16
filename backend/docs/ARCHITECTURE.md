@@ -1,7 +1,8 @@
-# FlowStorm Backend — Architecture Documentation
+# FlowStorm Backend Architecture Documentation
 
-**Version:** 1.0 | **Last Updated:** February 16, 2026
-**Project:** Self-Healing, Self-Optimizing Real-Time Stream Processing Engine
+**Version:** 1.0
+**Last Updated:** February 16, 2026
+**Project:** Self-Healing, Self-Optimizing Real-Time Stream Processing Engine (Backend)
 
 ---
 
@@ -22,26 +23,25 @@
 
 ## 1. System Overview
 
-FlowStorm uses a 5-layer architecture. This document focuses on the backend (Layers 2-5).
+The FlowStorm backend is built on a 4-layer architecture. Frontend clients communicate exclusively through REST and WebSocket APIs exposed by Layer 1.
+
+### 4-Layer Backend Architecture
 
 ```mermaid
 graph TD
-    subgraph Layer1[Frontend Client]
-        A[Frontend Client]
-    end
-    subgraph Layer2[API Layer]
+    subgraph Layer1[API Layer]
         E[FastAPI Backend]
         F[REST Endpoints]
         G[WebSocket Server]
         H[Authentication]
     end
-    subgraph Layer3[Runtime Engine Layer]
+    subgraph Layer2[Runtime Engine Layer]
         I[Pipeline Orchestrator]
         J[Worker Manager]
         K[Docker Runtime]
         L[Checkpoint Manager]
     end
-    subgraph Layer4[Intelligence Layer]
+    subgraph Layer3[Intelligence Layer]
         M[Health Monitor]
         N[Anomaly Detector]
         O[Self-Healer]
@@ -49,14 +49,12 @@ graph TD
         Q[Rules Engine]
         R[DAG Rewriter]
     end
-    subgraph Layer5[Data Backbone Layer]
+    subgraph Layer4[Data Backbone Layer]
         S[Redis Streams]
         T[PostgreSQL]
         U[MinIO Storage]
         V[Metrics Store]
     end
-    A --> E
-    A --> G
     E --> I
     F --> I
     G --> I
@@ -75,15 +73,10 @@ graph TD
     M --> V
 ```
 
-### Layer Responsibilities
-
-| Layer | Role | Key Capabilities |
-|-------|------|-----------------|
-| 1 - Frontend Client | External consumer | Communicates via REST and WebSocket APIs |
-| 2 - API Layer | Entry point | REST CRUD, WebSocket streaming, JWT auth, rate limiting |
-| 3 - Runtime Engine | Execution | Pipeline orchestration, worker lifecycle, checkpointing, container scheduling |
-| 4 - Intelligence | Autonomics | Health monitoring, anomaly detection, self-healing, DAG optimization |
-| 5 - Data Backbone | Persistence | Redis Streams, PostgreSQL, MinIO, metrics storage |
+**Layer 1 - API:** REST CRUD, WebSocket streaming, JWT auth, rate limiting.
+**Layer 2 - Runtime Engine:** Pipeline orchestration, worker lifecycle, checkpointing, container scheduling.
+**Layer 3 - Intelligence:** Health monitoring, anomaly detection, self-healing, DAG optimization.
+**Layer 4 - Data Backbone:** Redis Streams, PostgreSQL, MinIO, metrics storage.
 
 ---
 
@@ -91,26 +84,30 @@ graph TD
 
 Events flow from sources through operators to sinks, with Redis Streams as the backbone between worker containers.
 
+### Event Flow Sequence
+
 ```mermaid
 sequenceDiagram
     participant Source as Event Source
     participant RedisIn as Redis Stream (Input)
-    participant W1 as Worker 1
+    participant Worker1 as Worker Container 1
     participant RedisInt as Redis Stream (Internal)
-    participant W2 as Worker 2
+    participant Worker2 as Worker Container 2
     participant RedisOut as Redis Stream (Output)
     participant Sink as Event Sink
-    participant Mon as Health Monitor
+    participant Monitor as Health Monitor
     Source->>RedisIn: Publish event
-    RedisIn->>W1: XREAD event
-    W1->>W1: Apply operator logic
-    W1->>Mon: Send metrics
-    W1->>RedisInt: XADD transformed event
-    RedisInt->>W2: XREAD event
-    W2->>W2: Apply operator logic
-    W2->>Mon: Send metrics
-    W2->>RedisOut: XADD result
+    RedisIn->>Worker1: XREAD event
+    Worker1->>Worker1: Apply operator logic
+    Worker1->>Monitor: Send metrics
+    Worker1->>RedisInt: XADD transformed event
+    RedisInt->>Worker2: XREAD event
+    Worker2->>Worker2: Apply operator logic
+    Worker2->>Monitor: Send metrics
+    Worker2->>RedisOut: XADD result
     RedisOut->>Sink: Consume event
+    Monitor->>Worker1: Health check
+    Monitor->>Worker2: Health check
 ```
 
 ### Data Model
@@ -126,13 +123,15 @@ sequenceDiagram
 }
 ```
 
-**Stream Naming:** `pipeline:{pipeline_id}:operator:{operator_id}:in|out` / Consumer groups: `worker:{operator_id}`
+**Stream Naming:** `pipeline:{pid}:operator:{oid}:in|out` | Consumer groups: `worker:{oid}`
 
 ---
 
 ## 3. Self-Healing Architecture
 
 Implements the MAPE-K (Monitor, Analyze, Plan, Execute over Knowledge) loop for autonomous failure recovery.
+
+### MAPE-K Loop
 
 ```mermaid
 graph TD
@@ -157,55 +156,77 @@ Health Score = (CPU_Score x 0.30) + (Memory_Score x 0.30) + (Throughput_Score x 
 
 Thresholds: Healthy >= 80 | Degraded 60-79 | Critical 40-59 | Failing < 40
 
-### Anomaly Types and Healing Actions
+### 5 Anomaly Types
 
-| Anomaly | Trigger | Default Healing Action | Cooldown |
-|---------|---------|----------------------|----------|
-| High CPU | CPU > 85% for 3 checks | Scale horizontally | 5 min |
-| Memory Leak | Memory growth > 10%/min | Restart with checkpoint | 3 min |
-| Throughput Drop | Rate < 50% of baseline | Add buffer or scale | 5 min |
-| Latency Spike | P99 > 2x SLA for 5 min | Restart or optimize | 10 min |
-| Worker Death | No heartbeat for 30s | Immediate restart + replay | 1 min |
+```mermaid
+stateDiagram-v2
+    [*] --> Monitoring
+    Monitoring --> HighCPU: CPU > 85%
+    Monitoring --> MemoryLeak: Memory growth > 10%/min
+    Monitoring --> ThroughputDrop: Throughput < 50% baseline
+    Monitoring --> LatencySpike: Latency > 2x SLA
+    Monitoring --> WorkerDeath: Heartbeat timeout > 30s
+    HighCPU --> Analyzing
+    MemoryLeak --> Analyzing
+    ThroughputDrop --> Analyzing
+    LatencySpike --> Analyzing
+    WorkerDeath --> Analyzing
+    Analyzing --> Planning: Confirm anomaly
+    Planning --> Executing: Select healing action
+    Executing --> Monitoring: Apply fix
+```
 
-### Healing Action Flow
+### 4 Healing Actions
 
 ```mermaid
 flowchart TD
-    A[Anomaly Detected] --> B{Classify}
-    B -->|CPU/Throughput| C[Scale: spawn replica, distribute via consumer groups]
-    B -->|Memory| D[Restart: checkpoint, kill, respawn, replay]
-    B -->|Latency| E[Optimize: analyze, rewrite DAG, hot-swap]
-    B -->|Death| F[Recover: load checkpoint, spawn, resume]
-    C --> G[Cooldown + Continue Monitoring]
+    A[Anomaly Detected] --> B{Classify Anomaly}
+    B -->|High CPU/Throughput Drop| C[Scale Horizontally]
+    B -->|Memory Leak| D[Restart Worker]
+    B -->|Latency Spike| E[Optimize Operator]
+    B -->|Worker Death| F[Immediate Recovery]
+    C --> C1[Spawn replica + distribute via consumer groups]
+    C --> G[Cooldown 5 min]
+    D --> D1[Checkpoint, kill, respawn, replay]
     D --> G
+    E --> E1[Analyze, rewrite DAG, hot-swap]
     E --> G
+    F --> F1[Load checkpoint, spawn, resume]
     F --> G
+    G --> H[Continue monitoring]
 ```
 
-### Checkpoint Replay
+### Checkpoint Replay Flow
 
 ```mermaid
 sequenceDiagram
+    participant Worker as Failed Worker
     participant Healer as Self-Healer
     participant Store as Checkpoint Store
     participant Redis as Redis Streams
-    participant New as New Worker
+    participant NewWorker as New Worker
+    Worker->>Worker: Crash/Failure
+    Healer->>Healer: Detect missing heartbeat
     Healer->>Store: Fetch latest checkpoint
     Store-->>Healer: Return checkpoint data
-    Healer->>New: Spawn with checkpoint ID
-    New->>Store: Load checkpoint state
-    New->>Redis: Resume from checkpoint offset
-    Redis-->>New: Replay events
-    New->>Healer: Healthy heartbeat
+    Healer->>NewWorker: Spawn with checkpoint ID
+    NewWorker->>Store: Load checkpoint state
+    Store-->>NewWorker: Restore operator state
+    NewWorker->>Redis: Resume from checkpoint position
+    Redis-->>NewWorker: Stream events from last offset
+    NewWorker->>NewWorker: Process events
+    NewWorker->>Healer: Send healthy heartbeat
 ```
 
-**Checkpoint Strategy:** Every 60s or 10,000 events | MinIO with gzip compression | Retain last 10 per operator
+**Checkpoint Strategy:** Every 60s or 10,000 events | MinIO with gzip | Retain last 10 per operator
 
 ---
 
 ## 4. Auto-Optimization Pipeline
 
 Continuously analyzes performance patterns and rewrites the DAG without stopping the pipeline.
+
+### Optimization Architecture
 
 ```mermaid
 graph TD
@@ -223,11 +244,49 @@ graph TD
 
 ### 5 Optimization Types
 
-1. **Predicate Pushdown** -- Move filters closer to source. Conditions: selectivity < 50%, no upstream deps, savings > 30%.
-2. **Operator Fusion** -- Merge sequential stateless operators. Conditions: no branching, latency reduction > 20%.
-3. **Auto-Parallelization** -- Partition and parallelize stateless operators. Conditions: CPU > 70%, throughput below target.
-4. **Buffer Insertion** -- Smooth throughput mismatches > 2x between adjacent operators.
-5. **Window Optimization** -- Adjust window types/sizes based on data distribution. Improvement > 15%.
+**1. Predicate Pushdown** -- Move filters closer to source (selectivity < 50%, savings > 30%).
+
+```mermaid
+flowchart LR
+    subgraph Before
+        A1[Source] --> B1[Map] --> C1[Filter] --> D1[Aggregate]
+    end
+    subgraph After
+        A2[Source] --> B2[Filter] --> C2[Map] --> D2[Aggregate]
+    end
+```
+
+**2. Operator Fusion** -- Merge sequential stateless operators (latency reduction > 20%).
+
+```mermaid
+flowchart LR
+    subgraph Before
+        A1[Map: extract] --> B1[Map: transform] --> C1[Map: format]
+    end
+    subgraph After
+        A2[Fused Map: extract + transform + format]
+    end
+```
+
+**3. Auto-Parallelization** -- Partition stateless operators (CPU > 70%).
+
+```mermaid
+flowchart TD
+    A[Source] --> B[Partition by key]
+    B --> C1[Worker 1]
+    B --> C2[Worker 2]
+    B --> C3[Worker 3]
+    B --> C4[Worker 4]
+    C1 --> D[Merge]
+    C2 --> D
+    C3 --> D
+    C4 --> D
+    D --> E[Sink]
+```
+
+**4. Buffer Insertion** -- Smooth throughput mismatches > 2x.
+
+**5. Window Optimization** -- Adjust window types/sizes based on data distribution (improvement > 15%).
 
 ### DAG Rewriting Process
 
@@ -236,28 +295,25 @@ sequenceDiagram
     participant PA as Pattern Analyzer
     participant RE as Rules Engine
     participant DR as DAG Rewriter
+    participant PG as Pipeline Git
     participant LM as Live Migrator
-    participant P as Active Pipeline
+    participant Pipeline as Active Pipeline
     PA->>RE: Submit 15-min performance patterns
     RE->>DR: Propose DAG transformations
     DR->>DR: Validate correctness
+    DR->>PG: Create new version branch
     DR->>LM: Initiate migration
-    LM->>P: Dual-run for 2 min (A/B test)
-    alt Improvement
-        LM->>P: Cutover to new version
-    else Degradation
-        LM->>P: Rollback to old version
+    LM->>Pipeline: Dual-run for 2 min (A/B test)
+    alt Improvement detected
+        LM->>Pipeline: Cutover to new version
+        LM->>PG: Merge version to main
+    else No improvement
+        LM->>Pipeline: Stop new version workers
+        LM->>PG: Discard version branch
     end
 ```
 
-### Rules Engine Priorities
-
-| Priority | Type | Examples |
-|----------|------|---------|
-| 1 (Critical) | Correctness-preserving | Predicate pushdown, stateless fusion |
-| 2 (High) | Low-risk performance | Auto-parallelization, buffer insertion |
-| 3 (Medium) | Heuristic-based | Window adjustments, operator reordering |
-| 4 (Low) | Experimental | Code generation, hardware-specific |
+**Rules Priority:** Critical (predicate pushdown, fusion) > High (parallelization, buffering) > Medium (window tuning) > Low (experimental).
 
 ---
 
@@ -265,9 +321,11 @@ sequenceDiagram
 
 Built-in chaos module that injects failures to validate self-healing.
 
+### Chaos Injection Architecture
+
 ```mermaid
 flowchart TD
-    A[Chaos Controller] --> B{Scenario}
+    A[Chaos Controller] --> B{Select Scenario}
     B --> C1[CPU Stress]
     B --> C2[Memory Leak Sim]
     B --> C3[Network Partition]
@@ -281,20 +339,34 @@ flowchart TD
     F & G --> H[Generate Report + Update Policies]
 ```
 
-### Chaos Metrics
+### Chaos Validation Flow
 
-| Metric | Target SLA |
-|--------|-----------|
-| Time to Detection (TTD) | < 30 seconds |
-| Time to Healing (TTH) | < 10 seconds after detection |
-| Time to Recovery (TTR) | < 2 minutes |
-| Data Loss | 0 events (exactly-once) |
+```mermaid
+sequenceDiagram
+    participant User as User/Scheduler
+    participant CC as Chaos Controller
+    participant Target as Target Worker
+    participant Monitor as Health Monitor
+    participant Healer as Self-Healer
+    User->>CC: Trigger chaos scenario
+    CC->>Target: Inject failure (e.g., kill -9)
+    Target->>Target: Process dies
+    Monitor->>Monitor: Detect missing heartbeat
+    Monitor->>Healer: Report anomaly
+    Healer->>Target: Spawn new worker with checkpoint
+    Target->>Monitor: Send healthy heartbeat
+    CC->>User: Recovery time and actions report
+```
+
+**Target SLAs:** TTD < 30s | TTH < 10s after detection | TTR < 2 min | Data Loss: 0 events
 
 ---
 
 ## 6. WebSocket Event System
 
-Real-time event streaming from backend to connected clients.
+Real-time event streaming from backend to connected clients via Redis Pub/Sub bridging.
+
+### WebSocket Architecture
 
 ```mermaid
 graph TD
@@ -307,37 +379,31 @@ graph TD
     G --> H[Client 1..N WebSocket]
 ```
 
-### Event Types
-
-`pipeline.started` | `pipeline.stopped` | `operator.metrics` (every 5s) | `health.anomaly` | `healing.action` | `optimization.applied` | `chaos.injected` | `checkpoint.saved`
-
-### Event Schema
-
-```json
-{
-  "event_type": "operator.metrics",
-  "timestamp": "2026-02-16T10:30:45.123Z",
-  "pipeline_id": "pipeline-uuid",
-  "data": {
-    "operator_id": "operator-uuid",
-    "metrics": { "throughput": 1250.5, "latency_p99": 45.2, "cpu_percent": 67.3, "memory_mb": 512.8, "health_score": 85.5 }
-  }
-}
-```
+**8 Event Types:** `pipeline.started` | `pipeline.stopped` | `operator.metrics` | `health.anomaly` | `healing.action` | `optimization.applied` | `chaos.injected` | `checkpoint.saved`
 
 ### Connection Management
 
-- JWT authentication on connect
-- Selective subscription per pipeline
-- Auto-reconnect with exponential backoff (5s, 10s, 20s, 40s)
-- Heartbeat ping every 30s
-- Event batching every 100ms
+```mermaid
+stateDiagram-v2
+    [*] --> Disconnected
+    Disconnected --> Connecting: Client opens connection
+    Connecting --> Connected: WebSocket handshake
+    Connected --> Authenticated: JWT token
+    Authenticated --> Subscribed: Subscribe to pipeline
+    Subscribed --> Subscribed: Receive events
+    Subscribed --> Disconnected: Connection lost
+    Disconnected --> Connecting: Auto-reconnect (5s backoff)
+```
+
+**Features:** Exponential backoff (5s, 10s, 20s, 40s) | Heartbeat ping every 30s | Per-pipeline subscription | Event batching every 100ms
 
 ---
 
 ## 7. Pipeline Versioning
 
 Git-like version control for pipelines with auditable change history and rollback.
+
+### Version Control Flow
 
 ```mermaid
 flowchart TD
@@ -357,28 +423,31 @@ flowchart TD
     M -->|No| I
 ```
 
-### Version Snapshot Schema
+### Rollback Process
 
-```json
-{
-  "version_id": "uuid", "pipeline_id": "uuid", "version_number": "v1.5.2",
-  "parent_version_id": "uuid", "commit_message": "...", "commit_type": "auto_optimization",
-  "timestamp": "iso8601", "author": "system | user@example.com",
-  "dag_snapshot": { "operators": [], "edges": [], "config": {} },
-  "diff": { "added_operators": [], "removed_operators": [], "modified_operators": [], "edge_changes": [] },
-  "metrics_at_commit": { "throughput": 1250.5, "latency_p99": 45.2, "health_score": 85.5 }
-}
+```mermaid
+sequenceDiagram
+    participant User as User
+    participant API as FastAPI
+    participant VCS as Version Control System
+    participant Pipeline as Pipeline Orchestrator
+    participant Workers as Worker Containers
+    User->>API: Request rollback to v1.3.0
+    API->>VCS: Fetch version v1.3.0
+    VCS-->>API: Return DAG snapshot
+    API->>Pipeline: Initiate rollback
+    Pipeline->>Workers: Stop current version workers
+    Pipeline->>Workers: Spawn v1.3.0 workers
+    Workers->>Workers: Load latest checkpoint
+    Pipeline->>VCS: Create rollback commit
+    API->>User: Success notification
 ```
 
-**Auto-Commit Triggers:** Manual save, optimization applied, healing action, scheduled (24h), pre-deployment.
-
-**Versioning:** Major (breaking) | Minor (new operators, optimizations) | Patch (config, fixes, healing)
+**Auto-Commit Triggers:** Manual save | Optimization applied | Healing action | Scheduled (24h) | Pre-deployment. **Versioning:** Major (breaking) | Minor (optimizations) | Patch (fixes, healing).
 
 ---
 
 ## 8. Worker Lifecycle
-
-Each operator runs in an isolated Docker container managed by the Worker Manager.
 
 ### Worker State Machine
 
@@ -420,32 +489,39 @@ sequenceDiagram
     W->>Redis: XREAD loop (process + XADD to output)
 ```
 
-### Heartbeat
+### Heartbeat Mechanism
 
-Workers send heartbeats every 10 seconds via Redis. Missing heartbeat for 30s triggers self-healing.
-
-```json
-{
-  "worker_id": "uuid", "operator_id": "uuid", "status": "running",
-  "metrics": { "events_processed": 12450, "cpu_percent": 45.2, "memory_mb": 256.8, "last_checkpoint": "uuid" }
-}
-```
-
-### Resource Limits
-
-```yaml
-resources:
-  limits:   { cpu: "1.0", memory: "1Gi" }
-  requests: { cpu: "0.5", memory: "512Mi" }
+```mermaid
+flowchart LR
+    A[Worker Container] -->|Every 10s| B[Redis Heartbeat]
+    B --> C[Health Monitor]
+    C --> D{Received?}
+    D -->|Yes| E[Update timestamp]
+    D -->|No for 30s| F[Mark dead + self-heal]
 ```
 
 ### Checkpoint Lifecycle
 
-Every 60 seconds: serialize operator state, gzip compress, upload to MinIO, report to Worker Manager.
+```mermaid
+sequenceDiagram
+    participant Worker as Worker Container
+    participant MinIO as MinIO Storage
+    participant Manager as Worker Manager
+    loop Every 60 seconds
+        Worker->>Worker: Serialize + gzip state
+        Worker->>MinIO: Upload checkpoint
+        MinIO-->>Worker: Checkpoint ID
+        Worker->>Manager: Report success
+    end
+```
+
+**Resource Limits:** CPU 1.0 core (min 0.5) | Memory 1Gi (min 512Mi). Worker death triggers self-healing (see Section 3 Checkpoint Replay Flow).
 
 ---
 
 ## 9. Component Interaction Matrix
+
+### Communication Diagram
 
 ```mermaid
 graph TD
@@ -482,7 +558,7 @@ graph TD
     G <-->|Metrics| J
 ```
 
-### Communication Details
+### Communication Protocols
 
 | Source | Target | Protocol | Purpose |
 |--------|--------|----------|---------|
@@ -502,40 +578,22 @@ graph TD
 
 ## 10. Technology Decisions
 
-### Redis Streams over Apache Kafka
-
-Sub-millisecond latency, consumer groups for load balancing, unified stack (also handles pub/sub, metrics, caching), no ZooKeeper/broker management. Trade-off: ~1M vs Kafka's 10M+ events/sec ceiling.
-
-### FastAPI over Flask/Django
-
-Native async/await (ASGI), Pydantic validation, auto-generated OpenAPI docs, first-class WebSocket support, performance comparable to Node.js/Go.
-
-### Docker for Worker Isolation
-
-Fault isolation per operator, CPU/memory limits, portable images, independent dependency versioning, easy horizontal scaling. Trade-off: higher overhead than process isolation.
-
-### PostgreSQL for Metadata
-
-ACID guarantees for versioning, native JSONB for DAG storage, complex queries for version history/diffs, mature ecosystem.
-
-### MinIO for Checkpoints
-
-S3-compatible object storage, handles large checkpoint files, built-in versioning, self-hosted with cloud migration path.
-
-### Python for Worker Runtime
-
-Rich data science ecosystem (NumPy, Pandas, scikit-learn), rapid development, extensible to other languages. Trade-off: GIL limits CPU-bound tasks.
-
-### MAPE-K for Self-Healing
-
-Proven autonomic computing framework with clear separation (Monitor, Analyze, Plan, Execute), centralized knowledge base, easy to extend with new detectors and strategies.
+| Decision | Rationale | Trade-off |
+|----------|-----------|-----------|
+| Redis Streams over Kafka | Sub-ms latency, consumer groups, unified stack (pub/sub + metrics + caching), no ZooKeeper | ~1M vs 10M+ events/sec ceiling |
+| FastAPI over Flask/Django | Native async/await (ASGI), Pydantic validation, auto OpenAPI docs, first-class WebSocket | -- |
+| Docker for Worker Isolation | Fault isolation, CPU/memory limits, portable images, independent deps, easy scaling | Higher overhead than process isolation |
+| PostgreSQL for Metadata | ACID for versioning, native JSONB for DAG storage, complex queries for diffs | -- |
+| MinIO for Checkpoints | S3-compatible, handles large files, built-in versioning, self-hosted with cloud path | -- |
+| Python for Workers | Rich data science ecosystem, rapid development, extensible to Go/Rust | GIL limits CPU-bound tasks |
+| MAPE-K for Self-Healing | Proven autonomic computing framework, clear separation of concerns, extensible | -- |
 
 ---
 
 ## Conclusion
 
-FlowStorm's backend is designed for **resilience**, **performance**, and **autonomous operation**. The layered separation enables independent evolution. Self-healing ensures availability without manual intervention. Auto-optimization continuously improves throughput and latency. WebSocket streaming provides real-time visibility. Git-like versioning enables safe experimentation and rollback.
+The FlowStorm backend is designed for **resilience**, **performance**, and **autonomous operation**. The 4-layer separation enables independent evolution. Self-healing (MAPE-K) ensures availability without manual intervention. Auto-optimization continuously improves performance via live DAG rewriting. Chaos engineering validates resilience. Git-like versioning enables safe experimentation and rollback. WebSocket streaming provides real-time observability.
 
 ---
 
-**Document Version:** 1.0 | **Sections:** 10 | **Mermaid Diagrams:** 16 | **Status:** Backend Reference
+**Document Version:** 1.0 | **Sections:** 10 | **Mermaid Diagrams:** 22 | **Status:** Backend Reference

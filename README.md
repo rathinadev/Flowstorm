@@ -1,163 +1,232 @@
 # FlowStorm Frontend
 
-> Visual Pipeline Editor + Real-Time Dashboard
+> Visual Pipeline Editor + Real-Time Dashboard for Stream Processing
+
+[![React](https://img.shields.io/badge/React-18.2-61DAFB?logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-3178C6?logo=typescript&logoColor=white)](https://typescriptlang.org)
+[![Vite](https://img.shields.io/badge/Vite-5.1-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
+[![Tailwind](https://img.shields.io/badge/Tailwind-3.4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+
+---
 
 ## Architecture
 
-```mermaid
-graph TD
-    subgraph Pages["Main Views"]
-        PE[Pipeline Editor]
-        DB[Dashboard]
-    end
-
-    subgraph Components["Feature Components"]
-        RF[React Flow DAG]
-        MP[Metrics Panel]
-        HP[Health Panel]
-        CP[Chaos Panel]
-        LV[Lineage Viewer]
-        VH[Version History]
-    end
-
-    subgraph State["State Management (Zustand)"]
-        PS[Pipeline Store]
-        MS[Metrics Store]
-        CS[Chaos Store]
-    end
-
-    subgraph Services["Services"]
-        WS[WebSocket Client]
-        API[REST API Client]
-    end
-
-    Pages --> Components
-    Components --> State
-    State --> Services
-    Services -->|WebSocket| Backend[FastAPI Backend]
-    Services -->|HTTP| Backend
+```
+┌─────────────────────────────────────────────────────┐
+│  App.tsx (Root + Hash Router)                       │
+│  ┌──────────────────────────────────────────────┐   │
+│  │  Header.tsx (Status + Demo Controls)         │   │
+│  ├──────┬───────────────────────────────────────┤   │
+│  │ Side │  Active View                          │   │
+│  │ bar  │  ┌─ PipelineEditor (React Flow)       │   │
+│  │      │  ├─ Dashboard (4 panels)              │   │
+│  │  7   │  ├─ ChaosPanel                        │   │
+│  │ views│  ├─ LineagePanel                       │   │
+│  │      │  ├─ VersionHistory + VisualDiff        │   │
+│  │      │  ├─ DLQPanel                           │   │
+│  │      │  └─ ABTestPanel                        │   │
+│  └──────┴───────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────┘
+         │                          │
+    ┌────┴────┐              ┌──────┴──────┐
+    │ Zustand │              │ useWebSocket│
+    │ Stores  │              │    Hook     │
+    │ (3)     │              └──────┬──────┘
+    └────┬────┘                     │
+         │                     WebSocket
+    ┌────┴────┐              /api/ws/pipeline/:id
+    │ api.ts  │
+    │ (REST)  │
+    └────┬────┘
+         │
+    HTTP /api/*
 ```
 
 ## Directory Structure
 
 ```
 src/
-├── App.tsx                      # Root component + routing
-├── main.tsx                     # Entry point
+├── App.tsx                         # Root component + hash-based view routing
+├── main.tsx                        # React entry point
+├── index.css                       # Global styles + animations
 ├── components/
-│   ├── pipeline/                # DAG editor
-│   │   ├── PipelineEditor.tsx   # Main editor wrapper
-│   │   ├── CustomNodes.tsx      # Source, Operator, Sink nodes
-│   │   ├── CustomEdges.tsx      # Animated edges with metrics
-│   │   └── NodePalette.tsx      # Drag-from sidebar
-│   ├── dashboard/               # Observability
-│   │   ├── Dashboard.tsx        # Dashboard layout
-│   │   ├── MetricsPanel.tsx     # Throughput, latency charts
-│   │   ├── HealthPanel.tsx      # Cluster health view
-│   │   ├── HealingLog.tsx       # Self-healing action log
-│   │   └── OptimizationLog.tsx  # DAG optimization history
-│   ├── chaos/                   # Chaos engineering UI
-│   │   ├── ChaosPanel.tsx       # Chaos mode controls
-│   │   └── ChaosControls.tsx    # Intensity slider, toggles
-│   ├── lineage/                 # Data lineage
-│   │   ├── LineagePanel.tsx     # Lineage viewer
-│   │   └── EventTrace.tsx       # Single event trace
-│   ├── git/                     # Pipeline versioning
-│   │   ├── VersionHistory.tsx   # Version list
-│   │   ├── VisualDiff.tsx       # Side-by-side diff
-│   │   └── RollbackModal.tsx    # Rollback confirmation
-│   └── common/                  # Shared components
-│       ├── Header.tsx           # App header
-│       ├── Sidebar.tsx          # Navigation sidebar
-│       └── StatusBadge.tsx      # Health status indicators
-├── hooks/                       # Custom hooks
-│   ├── useWebSocket.ts          # WebSocket connection
-│   ├── usePipeline.ts           # Pipeline operations
-│   └── useMetrics.ts            # Metrics subscription
-├── services/                    # API layer
-│   ├── api.ts                   # REST client
-│   └── websocket.ts             # WebSocket manager
-├── store/                       # Zustand stores
-│   ├── pipelineStore.ts         # Pipeline state
-│   ├── metricsStore.ts          # Metrics state
-│   └── chaosStore.ts            # Chaos mode state
-├── utils/                       # Utilities
-├── types/                       # TypeScript types
-│   ├── pipeline.ts              # Pipeline types
-│   ├── metrics.ts               # Metrics types
-│   └── websocket.ts             # WS message types
+│   ├── pipeline/                   # Visual DAG Editor
+│   │   ├── PipelineEditor.tsx      # React Flow canvas + deploy controls
+│   │   ├── CustomNodes.tsx         # FlowStormNode with health + metrics
+│   │   ├── CustomEdges.tsx         # Animated edges with throughput labels
+│   │   ├── NodePalette.tsx         # 14 draggable operator types
+│   │   └── NodeConfigPanel.tsx     # Dynamic node configuration form
+│   ├── dashboard/                  # Monitoring Dashboard
+│   │   ├── Dashboard.tsx           # 2x2 grid layout
+│   │   ├── MetricsPanel.tsx        # Line chart: throughput over time
+│   │   ├── HealthPanel.tsx         # Per-worker health scores
+│   │   ├── HealingLog.tsx          # Self-healing event timeline
+│   │   └── OptimizationLog.tsx     # DAG optimization history
+│   ├── chaos/
+│   │   └── ChaosPanel.tsx          # Intensity slider + event feed
+│   ├── lineage/
+│   │   └── LineagePanel.tsx        # Event trace visualization
+│   ├── git/
+│   │   ├── VersionHistory.tsx      # Version timeline + rollback
+│   │   └── VisualDiff.tsx          # Node/edge diff viewer
+│   ├── dlq/
+│   │   └── DLQPanel.tsx            # Failed events + fix suggestions
+│   ├── ab/
+│   │   └── ABTestPanel.tsx         # Side-by-side metrics comparison
+│   └── common/
+│       ├── Header.tsx              # Pipeline status + demo controls
+│       └── Sidebar.tsx             # 7-view navigation
+├── store/                          # Zustand State Stores
+│   ├── pipelineStore.ts            # Pipeline nodes, edges, versions
+│   ├── metricsStore.ts             # Live metrics, health, healing/opt logs
+│   └── chaosStore.ts               # Chaos active state + event log
+├── hooks/
+│   └── useWebSocket.ts             # WS connection + event dispatching
+├── services/
+│   ├── api.ts                      # 30+ REST API methods (axios)
+│   └── websocket.ts                # WebSocket client
+├── types/
+│   ├── pipeline.ts                 # Pipeline, Node, Edge, OperatorType
+│   ├── metrics.ts                  # WorkerMetrics, Health, Events
+│   └── websocket.ts                # WS message types
+└── data/
+    └── demoPipeline.ts             # Default IoT pipeline (7 nodes)
 ```
 
-## Setup
+## Components
 
-```bash
-# Install dependencies
-npm install
+### Pipeline Editor (`components/pipeline/`)
 
-# Start dev server
-npm run dev
+| Component | Purpose |
+|-----------|---------|
+| **PipelineEditor** | React Flow canvas with drag-and-drop. Loads default demo pipeline on mount. Updates edge labels with live throughput from metrics store. Deploy/stop controls. |
+| **CustomNodes** | Renders each node with type badge (source/operator/sink), operator label, live EPS + latency metrics, health indicator glow, and input/output handles. Color-coded by node type. |
+| **CustomEdges** | Bezier edges with animated dashed stroke when pipeline is active. Shows events/second label. Animation speed varies with throughput. |
+| **NodePalette** | 3 groups (Sources: 3, Operators: 5, Sinks: 4) with draggable items. Each shows icon and color. |
+| **NodeConfigPanel** | Dynamic form that adapts to operator type. Text/number/select inputs for all OperatorConfig fields. |
 
-# Build for production
-npm run build
+### Dashboard (`components/dashboard/`)
 
-# Run tests
-npm test
+| Component | Purpose |
+|-----------|---------|
+| **Dashboard** | 2x2 responsive grid containing all 4 panels |
+| **MetricsPanel** | Recharts line chart showing throughput history. Displays total EPS, total events, worker count. |
+| **HealthPanel** | Per-worker health cards with score (0-100), color status, CPU/memory/latency breakdown. Computes average cluster health. |
+| **HealingLog** | Chronological feed of healing events (restart, migrate, scale-out, failover) with icons, timing, and details. |
+| **OptimizationLog** | Feed of optimization events (pushdown, fusion, parallel, buffer) with estimated gains and worker changes. |
+
+### Other Views
+
+| Component | Purpose |
+|-----------|---------|
+| **ChaosPanel** | Intensity selector (low/med/high), duration slider, start/stop button, 6 scenario descriptions, live event feed with severity badges |
+| **LineagePanel** | Event ID search input → vertical timeline showing event journey through each pipeline stage with processing times |
+| **VersionHistory** | Timeline of versions with trigger badges (USER/AUTO_OPTIMIZE/AUTO_HEAL/ROLLBACK), diff viewer, rollback confirmation |
+| **VisualDiff** | Stats summary + color-coded changes: green (added), red (removed), yellow (modified), old→new config values |
+| **DLQPanel** | Summary stats, failure groups with suggestions, individual failed event details |
+| **ABTestPanel** | Test creation form, active tests list, metric comparison bars with green winner highlight |
+
+## State Management (Zustand)
+
+### pipelineStore
+```typescript
+{
+  pipeline: Pipeline | null,       // Current pipeline definition
+  versions: PipelineVersion[],     // Version history
+  selectedNodeId: string | null,   // Selected node for config panel
+  isDirty: boolean                 // Unsaved changes flag
+}
 ```
 
-## Key Libraries
-
-- **React 18** - UI framework
-- **React Flow** - DAG editor (drag-drop nodes, edges, minimap, controls)
-- **Framer Motion** - Animations (node splitting, healing, migration)
-- **Tailwind CSS** - Utility-first styling
-- **Recharts** - Dashboard charts and graphs
-- **Zustand** - Lightweight state management
-- **Vite** - Build tool and dev server
-
-## Custom Node Types
-
-```mermaid
-graph LR
-    subgraph Sources["Source Nodes (Blue)"]
-        S1[MQTT Source]
-        S2[HTTP Source]
-        S3[Simulator]
-    end
-
-    subgraph Operators["Operator Nodes (Purple)"]
-        O1[Filter]
-        O2[Map/Transform]
-        O3[Window]
-        O4[Join]
-        O5[Aggregate]
-    end
-
-    subgraph Sinks["Sink Nodes (Green)"]
-        K1[Database]
-        K2[Alert]
-        K3[Webhook]
-    end
+### metricsStore
+```typescript
+{
+  metrics: PipelineMetrics | null,            // Latest metrics snapshot
+  workerHealth: Record<string, WorkerHealth>, // Per-worker health
+  healingLog: HealingEvent[],                 // Healing history
+  optimizationLog: OptimizationEvent[],       // Optimization history
+  throughputHistory: {time, eps}[]            // Chart data
+}
 ```
 
-Each node displays:
-- Operator name and type icon
-- Health status indicator (green/yellow/red glow)
-- Current throughput (events/sec)
-- Processing latency (ms)
-- Worker assignment
+### chaosStore
+```typescript
+{
+  active: boolean,         // Chaos mode on/off
+  intensity: string,       // low | medium | high
+  events: ChaosEvent[]     // Chaos event log
+}
+```
 
 ## WebSocket Events
 
-The frontend subscribes to real-time events from the backend:
+The `useWebSocket` hook connects to `WS /api/ws/pipeline/:id` and dispatches events to stores:
 
-| Event | Description | UI Effect |
-|-------|-------------|-----------|
-| `pipeline.metrics` | Throughput, latency per node | Update edge labels, charts |
-| `health.alert` | Worker health issue | Node turns yellow/red |
-| `worker.died` | Worker container dead | Node turns red, flash |
-| `worker.recovered` | Worker recovered | Migration animation, green |
-| `worker.scaled` | Operator scaled out | Node split animation |
-| `optimizer.applied` | DAG optimization | Before/after animation |
-| `chaos.event` | Chaos action triggered | Flash affected node |
-| `chaos.healed` | Self-healed from chaos | Recovery animation |
-| `pipeline_git.version` | New version created | Version list update |
+| Event | Store Action |
+|-------|-------------|
+| `pipeline.metrics` | `metricsStore.setMetrics()` + derive `workerHealth` (CPU 30%, Mem 30%, Throughput 20%, Latency 20%) |
+| `worker.recovered` | `metricsStore.addHealingEvent()` |
+| `worker.scaled` | `metricsStore.addHealingEvent()` |
+| `optimizer.applied` | `metricsStore.addOptimizationEvent()` |
+| `chaos.event` | `chaosStore.addEvent()` |
+| `chaos.started` | `chaosStore.setActive(true)` |
+| `chaos.stopped` | `chaosStore.setActive(false)` |
+
+## Custom Theme
+
+FlowStorm uses a dark theme via Tailwind config:
+
+| Token | Color | Usage |
+|-------|-------|-------|
+| `flowstorm-bg` | `#0f1117` | Page background |
+| `flowstorm-surface` | `#1a1d27` | Card/panel background |
+| `flowstorm-border` | `#2a2d3a` | Borders |
+| `flowstorm-primary` | `#6366f1` | Primary actions (indigo) |
+| `flowstorm-secondary` | `#8b5cf6` | Secondary elements (purple) |
+| `flowstorm-success` | `#22c55e` | Healthy status (green) |
+| `flowstorm-warning` | `#f59e0b` | Degraded status (amber) |
+| `flowstorm-danger` | `#ef4444` | Critical status (red) |
+
+## Development
+
+```bash
+npm install          # Install dependencies
+npm run dev          # Start dev server (http://localhost:3000)
+npm run build        # Production build
+npm test             # Run Vitest test suite
+npm run lint         # ESLint check
+```
+
+## API Client
+
+All backend communication goes through `services/api.ts`:
+
+```typescript
+// Pipeline lifecycle
+api.createPipeline(data)     // POST /api/pipelines
+api.deletePipeline(id)       // DELETE /api/pipelines/:id
+
+// Real-time features
+api.startChaos(id, intensity, duration)
+api.getHealth(id)
+api.getDLQ(id, count)
+api.getVersions(id)
+api.getLineage(pipelineId, eventId)
+
+// Demo mode
+api.startDemo()              // POST /api/demo/start
+api.stopDemo()               // POST /api/demo/stop
+```
+
+## Key Dependencies
+
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `react` | 18.2 | UI framework |
+| `reactflow` | 11.10 | Visual DAG editor with drag-and-drop |
+| `zustand` | 4.5 | Lightweight state management |
+| `recharts` | 2.12 | Throughput and metrics charts |
+| `framer-motion` | 11.0 | Animations and transitions |
+| `tailwindcss` | 3.4 | Utility-first CSS styling |
+| `vite` | 5.1 | Build tool + HMR dev server |
+| `vitest` | 4.0 | Test framework |

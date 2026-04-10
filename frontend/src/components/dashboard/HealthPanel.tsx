@@ -1,9 +1,9 @@
 import { useMetricsStore } from "../../store/metricsStore";
-import { getHealthStatus, HEALTH_COLORS } from "../../types/metrics";
+import { getHealthStatus, HEALTH_COLORS, type HealthStatus } from "../../types/metrics";
 
-function HealthBadge({ status }: { status: string }) {
+function HealthBadge({ status }: { status: HealthStatus }) {
   const color = HEALTH_COLORS[status] || "#6b7280";
-  const isPulsing = status === "running";
+  const isPulsing = status === "healthy";
 
   return (
     <span
@@ -105,7 +105,7 @@ export function HealthPanel() {
                 <div className="flex items-center gap-2">
                   <div
                     className={`w-2 h-2 rounded-full ${
-                      status === "running" ? "animate-pulse" : ""
+                      status === "healthy" ? "animate-pulse" : ""
                     }`}
                     style={{ backgroundColor: HEALTH_COLORS[status] }}
                   />

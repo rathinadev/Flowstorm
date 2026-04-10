@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useMetricsStore } from "../../store/metricsStore";
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, AreaChart, Area } from "recharts";
+import { XAxis, YAxis, ResponsiveContainer, Tooltip, AreaChart, Area } from "recharts";
 
 export function MetricsPanel() {
   const metrics = useMetricsStore((s) => s.metrics);

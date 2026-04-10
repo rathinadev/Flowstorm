@@ -66,8 +66,6 @@ function WorkersBadge({ added, removed }: { added: number; removed: number }) {
 export function OptimizationLog() {
   const optimizationLog = useMetricsStore((s) => s.optimizationLog);
 
-  // Check recent activity
-  const hasRecentActivity = optimizationLog.length > 0;
   const lastEvent = optimizationLog[0];
   const timeSinceLastEvent = lastEvent
     ? (Date.now() - new Date(lastEvent.timestamp || Date.now()).getTime()) / 1000

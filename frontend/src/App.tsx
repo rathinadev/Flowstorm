@@ -33,62 +33,6 @@ function App() {
   // Connect WebSocket when pipeline is active
   useWebSocket(pipelineId);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      const key = e.key.toLowerCase();
-
-      // Space = toggle demo
-      if (e.code === "Space") {
-        e.preventDefault();
-        if (demoRunning) {
-          handleStopDemo();
-        } else {
-          handleStartDemo();
-        }
-      }
-      // C = toggle chaos (if demo running)
-      else if (key === "c" && demoRunning && pipelineId) {
-        e.preventDefault();
-        // Toggle to chaos view
-        setActiveView("chaos");
-      }
-      // D = dashboard
-      else if (key === "d") {
-        e.preventDefault();
-        setActiveView("dashboard");
-      }
-      // P = pipeline
-      else if (key === "p") {
-        e.preventDefault();
-        setActiveView("pipeline");
-      }
-      // R = reset / refresh demo
-      else if (key === "r" && demoRunning) {
-        e.preventDefault();
-        handleStopDemo().then(() => {
-          setTimeout(() => handleStartDemo(), 500);
-        });
-      }
-      // 1-7 = switch views
-      else if (e.key >= "1" && e.key <= "7") {
-        const viewIndex = parseInt(e.key) - 1;
-        if (viewIndex < VALID_VIEWS.length) {
-          e.preventDefault();
-          setActiveView(VALID_VIEWS[viewIndex]);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [demoRunning, pipelineId, handleStartDemo, handleStopDemo]);
-
   const handleStartDemo = useCallback(async () => {
     try {
       const result = await api.startDemo();
@@ -149,6 +93,45 @@ function App() {
       console.error("Stop failed:", err);
     }
   }, [pipelineId]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (demoRunning) {
+          handleStopDemo();
+        } else {
+          handleStartDemo();
+        }
+      } else if (e.key.toLowerCase() === "c" && demoRunning && pipelineId) {
+        e.preventDefault();
+        setActiveView("chaos");
+      } else if (e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        setActiveView("dashboard");
+      } else if (e.key.toLowerCase() === "p") {
+        e.preventDefault();
+        setActiveView("pipeline");
+      } else if (e.key.toLowerCase() === "r" && demoRunning) {
+        e.preventDefault();
+        handleStopDemo().then(() => {
+          setTimeout(() => handleStartDemo(), 500);
+        });
+      } else if (e.key >= "1" && e.key <= "7") {
+        const viewIndex = parseInt(e.key) - 1;
+        if (viewIndex < VALID_VIEWS.length) {
+          e.preventDefault();
+          setActiveView(VALID_VIEWS[viewIndex]);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [demoRunning, pipelineId, handleStartDemo, handleStopDemo]);
 
   const renderView = () => {
     switch (activeView) {

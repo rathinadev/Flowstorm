@@ -1,5 +1,4 @@
 import { useMetricsStore } from "../../store/metricsStore";
-import { HEALTH_COLORS } from "../../types/metrics";
 
 const ACTION_ICONS: Record<string, string> = {
   failover: "⟳",

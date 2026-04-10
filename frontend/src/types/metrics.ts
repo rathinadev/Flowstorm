@@ -53,6 +53,7 @@ export interface OptimizationEvent {
   workers_added: number;
   workers_removed: number;
   duration_ms: number;
+  timestamp?: string;
 }
 
 export type HealthStatus = "healthy" | "degraded" | "critical" | "dead";

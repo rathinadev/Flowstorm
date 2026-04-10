@@ -123,6 +123,9 @@ class DemoSimulator:
         self._chaos_active = False
         self._degraded_node: str | None = None
         self._degraded_until = 0
+        self._last_chaos_tick = 0  # Track last chaos tick for healing trigger
+        self._last_healing_tick = 0  # Track last healing tick
+        self._last_optimization_tick = 0  # Track last optimization tick
 
     @property
     def is_running(self) -> bool:
@@ -153,16 +156,19 @@ class DemoSimulator:
         logger.info("Demo simulator started")
 
         # Broadcast deployment event
-        await self.ws_manager.broadcast(self.pipeline_id, {
-            "type": "pipeline.deployed",
-            "pipeline_id": self.pipeline_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "pipeline.deployed",
                 "pipeline_id": self.pipeline_id,
-                "workers": len(self.nodes),
-                "status": "running",
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "pipeline_id": self.pipeline_id,
+                    "workers": len(self.nodes),
+                    "status": "running",
+                },
             },
-        })
+        )
 
         return self._get_pipeline_info()
 
@@ -176,12 +182,15 @@ class DemoSimulator:
             except asyncio.CancelledError:
                 pass
 
-        await self.ws_manager.broadcast(self.pipeline_id, {
-            "type": "pipeline.stopped",
-            "pipeline_id": self.pipeline_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {"pipeline_id": self.pipeline_id},
-        })
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "pipeline.stopped",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {"pipeline_id": self.pipeline_id},
+            },
+        )
 
         logger.info("Demo simulator stopped")
 
@@ -203,17 +212,22 @@ class DemoSimulator:
                 await self._push_metrics()
                 self._tick += 1
 
-                # Healing event every ~15 seconds
-                if self._tick > 0 and self._tick % 30 == 0:
+                # Healing event every ~10 seconds (was ~15s) - more frequent
+                if self._tick > 0 and self._tick % 20 == 0:
                     await self._push_healing_event()
 
-                # Optimization event every ~40 seconds
-                if self._tick > 20 and self._tick % 80 == 40:
+                # Optimization event every ~20 seconds (was ~40s) - more frequent
+                if self._tick > 10 and self._tick % 40 == 20:
                     await self._push_optimization_event()
 
-                # Chaos event every ~25 seconds (if chaos active)
-                if self._chaos_active and self._tick % 50 == 25:
+                # Chaos event every ~10 seconds when active (was ~25s)
+                if self._chaos_active and self._tick % 20 == 10:
                     await self._push_chaos_event()
+
+                # Trigger healing 2-5s after chaos event
+                if self._last_chaos_tick > 0 and self._tick - self._last_chaos_tick >= 4:
+                    await self._push_healing_event()
+                    self._last_chaos_tick = 0
 
                 await asyncio.sleep(0.5)
         except asyncio.CancelledError:
@@ -288,13 +302,15 @@ class DemoSimulator:
     # ---- Healing Events ----
 
     async def _push_healing_event(self) -> None:
-        """Simulate a self-healing event."""
+        """Simulate a self-healing event with 3-stage sequence."""
+        # Skip if too soon since last healing
+        if self._tick - self._last_healing_tick < 15:
+            return
+
+        self._last_healing_tick = self._tick
+
         target_node = random.choice(self.nodes)
         scenario = random.choice(HEALING_SCENARIOS)
-
-        # Make the target node degraded temporarily
-        self._degraded_node = target_node["id"]
-        self._degraded_until = self._tick + 10  # 5 seconds degraded
 
         worker_id = f"w-{target_node['id']}-demo"
         new_worker_id = f"w-{target_node['id']}-{random.randint(1000, 9999)}"
@@ -310,41 +326,83 @@ class DemoSimulator:
 
         duration = round(random.uniform(200, 1500), 1)
 
-        # Push worker.recovered event
-        await self.ws_manager.broadcast(self.pipeline_id, {
-            "type": "worker.recovered",
-            "pipeline_id": self.pipeline_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {
-                "old_worker_id": worker_id,
-                "new_worker_id": new_worker_id,
-                "node_id": target_node["id"],
-                "events_replayed": random.randint(50, 500),
-                "duration_ms": duration,
+        # Stage 1: Push worker degraded event (health alert)
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "worker.degraded",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "worker_id": worker_id,
+                    "node_id": target_node["id"],
+                    "reason": scenario["trigger"],
+                    "health_score": random.randint(15, 28),
+                    "cpu_percent": random.randint(85, 98),
+                    "memory_percent": random.randint(80, 95),
+                },
             },
-        })
+        )
+
+        # Stage 2: Push worker.recovered event (healing complete)
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "worker.recovered",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "old_worker_id": worker_id,
+                    "new_worker_id": new_worker_id,
+                    "node_id": target_node["id"],
+                    "action": scenario["action"],
+                    "trigger": scenario["trigger"],
+                    "details": details,
+                    "events_replayed": random.randint(50, 500),
+                    "duration_ms": duration,
+                },
+            },
+        )
+
+        # Clear degraded state
+        self._degraded_node = None
+        self._degraded_until = 0
 
         logger.info(f"Demo: Simulated healing on {target_node['label']} ({scenario['action']})")
 
     # ---- Optimization Events ----
 
     async def _push_optimization_event(self) -> None:
-        """Simulate a DAG optimization being applied."""
-        scenario = random.choice(OPTIMIZATION_SCENARIOS)
+        """Simulate a DAG optimization being applied with tick tracking."""
+        # Skip if too soon since last optimization
+        if self._tick - self._last_optimization_tick < 30:
+            return
 
-        await self.ws_manager.broadcast(self.pipeline_id, {
-            "type": "optimizer.applied",
-            "pipeline_id": self.pipeline_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {
-                "optimization_type": scenario["type"],
-                "description": scenario["description"],
-                "estimated_gain": scenario["gain"],
-                "workers_added": random.choice([0, 1, 2]),
-                "workers_removed": 0,
-                "duration_ms": round(random.uniform(50, 300), 1),
+        self._last_optimization_tick = self._tick
+
+        scenario = random.choice(OPTIMIZATION_SCENARIOS)
+        workers_added = random.choice([0, 1, 2])
+
+        # Check if high CPU scenario triggers auto-parallelization
+        if scenario["type"] == "auto_parallel":
+            workers_added = random.choice([2, 3])
+
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "optimizer.applied",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "optimization_type": scenario["type"],
+                    "description": scenario["description"],
+                    "estimated_gain": scenario["gain"],
+                    "workers_added": workers_added,
+                    "workers_removed": 0,
+                    "duration_ms": round(random.uniform(50, 300), 1),
+                },
             },
-        })
+        )
 
         logger.info(f"Demo: Simulated optimization - {scenario['type']}")
 
@@ -358,30 +416,45 @@ class DemoSimulator:
 
         desc = scenario["desc"].format(w=worker_id, op=target_node["operator_type"])
 
-        await self.ws_manager.broadcast(self.pipeline_id, {
-            "type": "chaos.event",
-            "pipeline_id": self.pipeline_id,
-            "timestamp": datetime.utcnow().isoformat(),
-            "data": {
-                "scenario": scenario["scenario"],
-                "target": worker_id,
-                "description": desc,
-                "severity": scenario["severity"],
-                "timestamp": datetime.utcnow().isoformat(),
-            },
-        })
-
-        # Degrade the target node
+        # Degrade the target node (visual feedback)
         self._degraded_node = target_node["id"]
         self._degraded_until = self._tick + 16  # 8 seconds degraded
 
-        # After a delay, push the healing response
-        async def _delayed_heal():
-            await asyncio.sleep(random.uniform(2, 5))
-            if self._running:
-                await self._push_healing_event()
+        # Track last chaos tick for healing trigger
+        self._last_chaos_tick = self._tick
 
-        asyncio.create_task(_delayed_heal())
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "chaos.event",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "scenario": scenario["scenario"],
+                    "target": worker_id,
+                    "description": desc,
+                    "severity": scenario["severity"],
+                    "timestamp": datetime.utcnow().isoformat(),
+                },
+            },
+        )
+
+        # Notify health monitor of degraded worker (will trigger healing in main loop)
+        await self.ws_manager.broadcast(
+            self.pipeline_id,
+            {
+                "type": "worker.degraded",
+                "pipeline_id": self.pipeline_id,
+                "timestamp": datetime.utcnow().isoformat(),
+                "data": {
+                    "worker_id": worker_id,
+                    "node_id": target_node["id"],
+                    "reason": scenario["scenario"],
+                    "cpu_percent": 90,
+                    "memory_percent": 85,
+                },
+            },
+        )
 
     def set_chaos_active(self, active: bool) -> None:
         """Toggle chaos mode."""
@@ -458,21 +531,22 @@ class DemoSimulator:
         base_time = datetime.utcnow()
         for i in range(min(count, 30)):
             err = errors[i % len(errors)]
-            entries.append({
-                "event_id": f"evt-dlq-{1000 + i}",
-                "node_id": err["node_id"],
-                "error_message": err["error_message"],
-                "failure_type": err["failure_type"],
-                "suggestions": err["suggestions"],
-                "timestamp": (
-                    base_time - __import__("datetime").timedelta(seconds=i * 12)
-                ).isoformat(),
-            })
+            entries.append(
+                {
+                    "event_id": f"evt-dlq-{1000 + i}",
+                    "node_id": err["node_id"],
+                    "error_message": err["error_message"],
+                    "failure_type": err["failure_type"],
+                    "suggestions": err["suggestions"],
+                    "timestamp": (base_time - __import__("datetime").timedelta(seconds=i * 12)).isoformat(),
+                }
+            )
         return entries
 
     def get_demo_versions(self) -> list[dict]:
         """Return realistic demo pipeline version history."""
         from datetime import timedelta
+
         base_time = datetime.utcnow()
         return [
             {

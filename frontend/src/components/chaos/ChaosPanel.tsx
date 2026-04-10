@@ -1,6 +1,25 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useChaosStore } from "../../store/chaosStore";
 import { api } from "../../services/api";
+
+// Flash effect overlay component
+function ChaosFlash({ active }: { active: boolean }) {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (active) {
+      setShow(true);
+      const timer = setTimeout(() => setShow(false), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [active]);
+
+  if (!show) return null;
+
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50 bg-red-500/20 animate-ping" />
+  );
+}
 
 const INTENSITIES = [
   {
@@ -71,7 +90,10 @@ export function ChaosPanel({ pipelineId }: ChaosPanelProps) {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* Flash effect */}
+      <ChaosFlash active={active && events.length > 0} />
+      
       {/* Header */}
       <div className="bg-flowstorm-surface border-b border-flowstorm-border px-4 py-3">
         <div className="flex items-center justify-between">

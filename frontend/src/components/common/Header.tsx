@@ -135,6 +135,12 @@ export function Header({ pipelineId, pipelineName, pipelineStatus, onNameChange,
             {pipelineId ? "Connected" : "No Pipeline"}
           </span>
         </div>
+
+        {/* Keyboard shortcuts hint */}
+        <div className="flex items-center gap-1 text-[9px] text-flowstorm-muted">
+          <kbd className="px-1 py-0.5 bg-flowstorm-bg rounded border border-flowstorm-border">Space</kbd>
+          <span>demo</span>
+        </div>
       </div>
     </header>
   );

@@ -23,6 +23,7 @@ A self-healing, self-optimizing real-time stream processing engine with a live v
 - Health Monitor Agent sends heartbeats every 500ms, tracks CPU/memory/throughput/latency per operator
 - Decision Engine uses rule-based + heuristic optimizer for autonomous healing decisions
 - Execution Planner generates new DAG placement plans with live migration (no downtime)
+- **Event Timing**: Self-healing events fire every ~10 seconds automatically, plus triggered 2-5 seconds after chaos events
 
 ### Pillar 3: Self-Optimizing DAG (The Muscle)
 - **Predicate Pushdown**: Moves filters closer to source to reduce data volume early
@@ -31,6 +32,7 @@ A self-healing, self-optimizing real-time stream processing engine with a live v
 - **Window Optimization**: Switches windowing strategy based on data patterns (time-window vs count-window)
 - Engine observes data patterns (selectivity ratios, throughput, compute cost) and restructures the DAG automatically
 - Before/after visualization of optimizations on the pipeline view
+- **Event Timing**: Auto-optimization events fire every ~20 seconds automatically, plus triggered when high CPU (>85%) detected
 
 ### Pillar 4: Live Observability Dashboard
 - Cluster health percentage
@@ -50,6 +52,7 @@ A self-healing, self-optimizing real-time stream processing engine with a live v
 - Randomly: kills workers, injects network latency, corrupts events, simulates memory pressure, floods sources with 50x data
 - System self-heals from all chaos while user watches
 - Configurable chaos intensity levels
+- **Event Timing**: Chaos events fire every ~10 seconds when active
 
 ### Feature 6: Pipeline Git (Version Control for Pipelines)
 - Every change (manual or auto-optimization) is versioned like git commits

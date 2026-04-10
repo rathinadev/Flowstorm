@@ -1196,9 +1196,9 @@ Runs as an async background task, pushing events at 500ms intervals.
 | Event Type | Frequency | Content |
 |------------|-----------|---------|
 | `pipeline.metrics` | Every 500ms (every tick) | Per-worker CPU, memory, throughput, latency with realistic oscillation |
-| `worker.recovered` | Every ~15 seconds (tick % 30 == 0) | Simulated healing with random scenario |
-| `optimizer.applied` | Every ~40 seconds (tick % 80 == 40) | Simulated optimization from 5 types |
-| `chaos.event` | Every ~25 seconds when active (tick % 50 == 25) | Simulated chaos with delayed healing response |
+| `worker.recovered` | Every ~10 seconds (tick % 20 == 0) + chaos-triggered | 3-stage healing sequence: degraded → wait → recovered |
+| `optimizer.applied` | Every ~20 seconds (tick % 40 == 20) + CPU-triggered | Auto-parallel adds 2-3 workers when CPU >85% |
+| `chaos.event` | Every ~10 seconds when active (tick % 20 == 10) | Simulated chaos with immediate healing trigger |
 
 **Realistic Metrics Generation:**
 Each node has a base state initialized with random values. Metrics oscillate using sine waves with per-node phase offsets and Gaussian noise:

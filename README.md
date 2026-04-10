@@ -113,6 +113,8 @@ Worker Heartbeats (1s) → Health Monitor → Anomaly Detector → Self-Healer �
 - **4 Healing Actions**: Restart worker, migrate operator, scale-out, failover with checkpoint replay
 - **Cooldown Mechanism**: Prevents healing loops from cascading false positives
 - **Sub-second Recovery**: Checkpoint-based replay achieves exactly-once semantics
+- **Event Frequency**: Self-healing events fire every ~10 seconds automatically, plus 2-5 seconds after chaos events
+- **3-Stage Sequence**: Worker degraded → health alert → recovered (full recovery sequence visible in UI)
 
 ### Auto-Optimization
 
@@ -128,6 +130,9 @@ The optimizer continuously watches runtime metrics and rewrites the DAG topology
 
 Every optimization creates a versioned snapshot in Pipeline Git for instant rollback.
 
+- **Event Frequency**: Optimization events fire every ~20 seconds automatically
+- **Trigger-based**: Also fires when high CPU (>85%) is detected (auto-parallelization)
+
 ### Visual Pipeline Editor
 
 A React Flow-based drag-and-drop interface with **14 operator types**:
@@ -141,6 +146,21 @@ A React Flow-based drag-and-drop interface with **14 operator types**:
 | | Aggregate | |
 
 **Live overlays** show events/second on edges and health scores on nodes during execution.
+
+### Visual Features
+
+FlowStorm includes enhanced visualizations for real-time monitoring:
+
+| Feature | Description |
+|---------|-------------|
+| **Sparkline Chart** | Mini throughput trend in dashboard header |
+| **Gradient Area Chart** | Smooth area chart with gradient fill |
+| **Trend Indicator** | ↑/↓/→ showing % change in throughput |
+| **Edge Throughput Colors** | Color-coded edges (green >1000, blue >500, yellow >100, orange >0) |
+| **Animated Flowing Dots** | Small dots animating on high-throughput edges |
+| **Status Badges** | Pulsing green/yellow/red worker badges |
+| **Progress Bars** | CPU and Memory usage bars per worker |
+| **Live Indicator** | Pulsing green dot showing active connection |
 
 ### Chaos Engineering
 
@@ -249,12 +269,26 @@ FlowStorm includes a built-in demo simulator that generates realistic metrics wi
 2. A default **IoT Temperature Monitor** pipeline is pre-loaded with 7 nodes
 3. Click **Start Demo** in the header
 4. Watch all panels come alive:
-   - Real-time metrics flowing through the pipeline
-   - Self-healing events every ~15 seconds
-   - Auto-optimization events every ~40 seconds
+   - Real-time metrics flowing through the pipeline (500ms updates)
+   - Self-healing events every ~10 seconds + chaos-triggered
+   - Auto-optimization events every ~20 seconds
+   - Chaos events every ~10 seconds (when chaos mode active)
    - DLQ entries with diagnostic data
    - Version history with diffs
    - Data lineage traces
+
+### Keyboard Shortcuts
+
+FlowStorm supports keyboard shortcuts for quick demo control:
+
+| Key | Action |
+|-----|--------|
+| `Space` | Toggle demo on/off |
+| `C` | Switch to Chaos view |
+| `D` | Switch to Dashboard view |
+| `P` | Switch to Pipeline view |
+| `R` | Reset/restart demo |
+| `1-7` | Quick switch to any view |
 
 ---
 
